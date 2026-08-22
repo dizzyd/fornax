@@ -1,0 +1,57 @@
+Fornax is Latin for furnace, and the name of the Roman goddess of the oven
+— a deity most likely invented to explain a festival that already existed. At the
+Fornacalia, on the seventeenth of February, spelt was parched for sacrificial cakes, and Romans
+prayed to Fornax to keep the grain from scorching. The word was borrowed once more in the 1750s,
+when Lacaille hung a chemical furnace among the southern stars.
+
+This is the third borrowing, and the most literal. Between the pit kiln and the beehive kiln
+there is a long gap: the pit kiln fires four things at a time and eats firewood doing it, while
+the beehive kiln wants refractory brick and an iron door, which means a bloomery first. Fornax
+is the kiln that goes in between — raw mud brick, a clay grate floor, firewood or peat,
+and no iron at all.
+
+pit kilnupdraft kilnbeehive kiln
+wares per firing4~36~108
+fuel per firing8 firewood10 firewood9 coal piles
+fuel per ware2.00.28—
+iron needednonoyes
+
+Building it
+A 5x5 mud brick drum around a 3x3x4 chamber, corbelled in to a chimney neck and a draft
+vent. Cob works anywhere mud brick does. Nine grate tiles form the floor the wares sit on;
+they are clay-formed and then fired in a pit kiln, so you use the older technology once to
+build the newer one.
+
+Place the firebox where you want the front to be — it turns to face you — then
+Ctrl + right-click it with an empty hand. A blueprint of ghost blocks shows
+everything still to place, drawn with each block's own texture so you can see what goes where,
+and red for anything in the way.
+
+Firing
+Load green pottery or raw bricks onto the grate as ordinary ground storage, seal the
+loading entrance with mud, fuel the firebox and light it. A batch costs a fixed amount of fuel
+energy whatever you burn — hotter fuel simply gets through it faster:
+
+10 firewood — about 13 hours
+10 peat bricks — about 8 hours
+6 charcoal — about 6 hours
+
+The firebox tells you what it is doing from across the yard: dark when empty, firewood in
+the mouth when fuelled, glowing red coals while the chamber warms, and bright orange flame once
+it is up to temperature. Look at it for hours of burn remaining and firing progress.
+
+Opening it early
+Break a seal while the kiln is hot and thermal shock shatters part of the load —
+nothing below 450°C, up to about half the batch at full heat. That threshold is exactly
+when the firebox turns from red to orange, so the colour is the warning. Whatever survives
+keeps the heat it has taken, and a repaired kiln picks up where it left off.
+
+The mud seals crack in every firing and must be replaced, which is the kiln's running cost:
+throughput and fuel economy paid for in clay rather than firewood.
+
+Notes
+
+Full handbook entry, in the style of the vanilla kiln pages.
+Works with any modded clay ware — anything the game can fire, this fires.
+Every number above is configurable in ModConfig/fornax.json.
+Named for the Latin for furnace. Everything in game is still called an updraft kiln.

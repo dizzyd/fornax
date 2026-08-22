@@ -1,0 +1,232 @@
+{
+	"code": "kilnvent",
+	"class": "Block",
+	"variantgroups": [
+		{
+			"code": "state",
+			"states": [
+				"idle",
+				"drafting"
+			]
+		}
+	],
+	"attributes": {
+		"handbook": {
+			"groupBy": [
+				"kilnvent-idle"
+			]
+		}
+	},
+	"shape": {
+		"base": "fornax:block/vent"
+	},
+	"blockmaterial": "Soil",
+	"creativeinventoryByType": {
+		"*-idle": {
+			"general": [
+				"*"
+			],
+			"construction": [
+				"*"
+			]
+		},
+		"*": {}
+	},
+	"replaceable": 500,
+	"resistance": 3.5,
+	"lightAbsorption": 0,
+	"sideopaque": {
+		"all": false
+	},
+	"sidesolid": {
+		"all": false
+	},
+	"textures": {
+		"brick": {
+			"base": "game:block/soil/mudbrick/dark1",
+			"alternates": [
+				{
+					"base": "game:block/soil/mudbrick/dark2"
+				}
+			]
+		},
+		"inside": {
+			"base": "game:block/clay/ceramic-dark"
+		}
+	},
+	"particlePropertiesByType": {
+		"*-drafting": [
+			{
+				"//": "the plume drawn up the chimney and out of the vent",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 60,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "quadratic",
+					"factor": -16
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0,
+						"var": 0.15
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0,
+						"var": 0.15
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0,
+						"var": 0.05
+					},
+					{
+						"avg": 0.6,
+						"var": 0.15
+					},
+					{
+						"avg": 0,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.6
+				},
+				"size": {
+					"avg": 0.5,
+					"var": 0.1
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.8
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 4.5
+				},
+				"windAffectednes": 0.8
+			}
+		],
+		"*": [
+			{
+				"//": "registration placeholder - emits nothing",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					}
+				],
+				"quantity": {
+					"avg": 0
+				},
+				"size": {
+					"avg": 0.1,
+					"var": 0
+				},
+				"lifeLength": {
+					"avg": 0.1
+				},
+				"particleModel": "Quad"
+			}
+		]
+	},
+	"dropsByType": {
+		"*": [
+			{
+				"type": "block",
+				"code": "kilnvent-idle",
+				"quantity": {
+					"avg": 1,
+					"var": 0
+				}
+			}
+		]
+	},
+	"collisionbox": {
+		"x1": 0,
+		"y1": 0,
+		"z1": 0,
+		"x2": 1,
+		"y2": 1,
+		"z2": 1
+	},
+	"selectionbox": {
+		"x1": 0,
+		"y1": 0,
+		"z1": 0,
+		"x2": 1,
+		"y2": 1,
+		"z2": 1
+	},
+	"sounds": {
+		"walk": "game:walk/stone",
+		"place": "game:block/dirt",
+		"break": "game:block/dirt",
+		"hit": "game:block/dirt"
+	},
+	"heldTpIdleAnimation": "holdbothhandslarge",
+	"heldRightReadyAnimation": "heldblockready",
+	"heldTpUseAnimation": "twohandplaceblock",
+	"guiTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0.5,
+			"z": 0.5
+		},
+		"rotation": {
+			"x": -22.6,
+			"y": -45.3,
+			"z": 0
+		},
+		"scale": 1.0
+	},
+	"tpHandTransform": {
+		"translation": {
+			"x": -1.23,
+			"y": -0.91,
+			"z": -0.8
+		},
+		"rotation": {
+			"x": -2,
+			"y": 25,
+			"z": -78
+		},
+		"scale": 0.4
+	},
+	"materialDensity": 2000
+}

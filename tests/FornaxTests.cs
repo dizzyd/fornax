@@ -1,0 +1,1524 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Fornax;
+using Vintagestory.API.Common;
+using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
+using Vintagestory.GameContent;
+using VsTestkit.Testing;
+using static VsTestkit.Testing.Vs;
+
+/// <summary>
+/// The updraft kiln is almost entirely string- and structure-driven: a 125-entry multiblock
+/// definition, block codes resolved by wildcard, and wares converted through combustibleProps.
+/// None of that is checked by the compiler, so all of it is checked here.
+/// </summary>
+public class FornaxTests
+{
+    private const string Wall = "game:mudbrick-dark";
+    private const string Grate = "fornax:kilngrate";
+    private const string Seal = "fornax:kilnseal-intact";
+    private const string Cracked = "fornax:kilnseal-cracked";
+    private const string Vent = "fornax:kilnvent-idle";
+
+    // "side" is the face the block shows the player, so a south-facing mouth puts the kiln to the north (-z).
+    private const string Firebox = "fornax:kilnfirebox-cold-south";
+
+    // One course above the ground block, which is where a player building by hand puts it -
+    // sunk flush with the terrain the firebox mouth cannot even be clicked.
+    private static BlockPos Fb() => P(8, 1, 12);
+    private static BlockPos Center() => Fb().AddCopy(0, 0, -2);
+    private static BlockPos Ware(int dx, int dz) => Fb().AddCopy(dx, 2, dz - 2);
+
+    // ------------------------------------------------------------------
+    //  Construction
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Builds the kiln in its canonical orientation: mouth facing +z, body running to -z,
+    /// 5x5 drum for four courses then corbelled in to a 3x3 neck and cap.
+    /// </summary>
+    public static void Build(BlockPos f, bool sealEntrance = true)
+    {
+        for (int y = 0; y <= 3; y++)
+        {
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dz = 0; dz >= -4; dz--)
+                {
+                    bool isCorner = Math.Abs(dx) == 2 && (dz == 0 || dz == -4);
+                    bool perimeter = Math.Abs(dx) == 2 || dz == 0 || dz == -4;
+                    string code;
+
+                    // The corners stop at grate level; the two courses above are open.
+                    if (isCorner && y >= 2) code = "game:air";
+                    else if (perimeter)
+                    {
+                        if (y == 0 && dx == 0 && dz == 0) code = Firebox;
+                        else if ((y == 2 || y == 3) && dz == 0 && Math.Abs(dx) <= 1) code = sealEntrance ? Seal : "game:air";
+                        else code = Wall;
+                    }
+                    else
+                    {
+                        if (y == 0) code = (dx == 0 && dz == -2) ? Wall : "game:air";
+                        else if (y == 1) code = Grate;
+                        else code = "game:air";
+                    }
+
+                    World.SetBlock(code, f.AddCopy(dx, y, dz));
+                }
+            }
+        }
+
+        // corbel: 3x3 neck around a 1x1 flue, everything outside it cleared
+        for (int dx = -2; dx <= 2; dx++)
+        {
+            for (int dz = 0; dz >= -4; dz--)
+            {
+                bool neck = Math.Abs(dx) <= 1 && dz >= -3 && dz <= -1;
+                string code = neck ? ((dx == 0 && dz == -2) ? "game:air" : Wall) : "game:air";
+                World.SetBlock(code, f.AddCopy(dx, 4, dz));
+            }
+        }
+
+        // 3x3 cap with the draft vent at its centre
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz >= -3; dz--)
+            {
+                World.SetBlock((dx == 0 && dz == -2) ? Vent : Wall, f.AddCopy(dx, 5, dz));
+            }
+        }
+    }
+
+    private static void BuildKiln(bool sealEntrance = true) => Build(Fb(), sealEntrance);
+
+    /// <summary>The firebox does its real work every third one-second tick.</summary>
+    private static async Task Tick3s()
+    {
+        for (int i = 0; i < 3; i++) await World.TickNow(Fb());
+    }
+
+    private static BlockEntityUpdraftFirebox Be() => World.BE<BlockEntityUpdraftFirebox>(Fb());
+
+    private static void LoadWare(int dx, int dz, string code, int count)
+    {
+        BlockPos pos = Ware(dx, dz);
+        World.SetBlock("game:groundstorage", pos);
+
+        var gs = World.BE<BlockEntityGroundStorage>(pos);
+        gs.Inventory[0].Itemstack = World.Stack(code, count);
+        gs.Inventory[0].MarkDirty();
+        gs.MarkDirty(true);
+    }
+
+    private static void Fuel(string code, int count)
+    {
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack(code, count);
+        be.Inventory[0].MarkDirty();
+        be.MarkDirty(true);
+    }
+
+    // ------------------------------------------------------------------
+    //  Registration
+    // ------------------------------------------------------------------
+
+    [VsTest]
+    public async Task EveryKilnBlockRegisters()
+    {
+        string[] codes = { Grate, Seal, Cracked, Vent, Firebox, "fornax:kilnfirebox-cold-north", "fornax:kilnfirebox-warming-south", "fornax:kilnvent-drafting" };
+
+        for (int i = 0; i < codes.Length; i++)
+        {
+            BlockPos pos = P(1 + i, 1, 1);
+            World.SetBlock(codes[i], pos);
+            await Ticks(1);
+            Assert.Equal(codes[i], World.BlockCode(pos));
+        }
+    }
+
+    [VsTest]
+    public async Task RawGrateItemFiresIntoTheGrateBlock()
+    {
+        ItemStack raw = World.Stack("fornax:kilngrateraw", 1);
+        Assert.NotNull(raw);
+
+        var props = raw.Collectible.CombustibleProps;
+        Assert.NotNull(props);
+        Assert.Equal(EnumSmeltType.Fire, props.SmeltingType);
+        Assert.Equal("fornax:kilngrate", props.SmeltedStack.ResolvedItemstack.Collectible.Code.ToString());
+
+        // The raw tile should BE the fired tile, just unfired: same shape, so it reads as
+        // one object through the whole chain rather than turning from a brick into a grate.
+        var fired = World.Block("fornax:kilngrate");
+        Assert.NotNull(fired);
+        var rawItem = raw.Collectible as Item;
+        Assert.NotNull(rawItem);
+        string rawShape = rawItem.Shape?.Base?.ToString();
+        string firedShape = fired.Shape?.Base?.ToString();
+        Log($"raw shape   = {rawShape}");
+        Log($"fired shape = {firedShape}");
+        Assert.Equal(firedShape, rawShape);
+
+        // The shape's faces reference #front1, so a texture override has to use that code -
+        // declaring "all" silently does nothing. Textures are only resolved client-side, so
+        // this half of the check only runs when a client is attached.
+        if (fired.Textures != null && rawItem.Textures != null)
+        {
+            Log($"texture codes: fired={string.Join(",", fired.Textures.Keys)} raw={string.Join(",", rawItem.Textures.Keys)}");
+            Assert.True(fired.Textures.ContainsKey("front1"), "fired tile must override front1");
+            Assert.True(rawItem.Textures.ContainsKey("front1"), "raw tile must override front1");
+        }
+        else Log("textures not resolved on this side - skipping the texture-code check");
+
+        await Ticks(1);
+    }
+
+
+    [VsTest]
+    public async Task RecipesResolve()
+    {
+        // A malformed recipe does not throw - it just quietly never loads, so assert on the
+        // registry rather than trusting a clean startup log. The ingredient counts are here
+        // too, because a mispriced recipe is just as silent.
+        var grid = Sapi.World.GridRecipes.FindAll(r =>
+            r.Output?.ResolvedItemStack?.Collectible?.Code?.Domain == "fornax");
+
+        var made = new Dictionary<string, GridRecipe>();
+        foreach (var r in grid) made[r.Output.ResolvedItemStack.Collectible.Code.Path] = r;
+
+        Log("grid recipes: " + string.Join(", ", made.Keys));
+        Assert.True(made.ContainsKey("kilnfirebox-cold-north"), "no grid recipe produces kilnfirebox-cold-north");
+        Assert.True(made.ContainsKey("kilnvent-idle"), "no grid recipe produces kilnvent-idle");
+        Assert.True(made.ContainsKey("kilnseal-intact"), "no grid recipe produces kilnseal-intact");
+
+        AssertIngredients(made["kilnfirebox-cold-north"], "burnedbrick", 5, "mudbrick", 3);
+        AssertIngredients(made["kilnseal-intact"], "clay", 4, "soil", 1);
+        // One seal per craft: six seals per firing is 24 clay and 6 dirt, which is
+        // deliberately the kiln's main running cost.
+        Assert.Equal(1, made["kilnseal-intact"].Output.Quantity);
+        await Ticks(1);
+    }
+
+    private static void AssertIngredients(GridRecipe recipe, string aPart, int aCount, string bPart, int bCount)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var ing in recipe.ResolvedIngredients)
+        {
+            if (ing?.Code == null) continue;
+            string key = ing.Code.Path.Split('-')[0];
+            counts[key] = (counts.TryGetValue(key, out var n) ? n : 0) + Math.Max(1, ing.Quantity);
+        }
+
+        Log($"  {recipe.Output.ResolvedItemStack.Collectible.Code.Path}: " +
+            string.Join(", ", counts.Select(kv => $"{kv.Value}x {kv.Key}")));
+
+        Assert.Equal(aCount, counts.TryGetValue(aPart, out var a) ? a : 0);
+        Assert.Equal(bCount, counts.TryGetValue(bPart, out var b) ? b : 0);
+    }
+
+    /// <summary>
+    /// Which way a placed firebox ends up facing. HorizontalOrientable points "side" AWAY from
+    /// whoever places the block, which put the mouth - and the kiln's whole front - facing away
+    /// from the player. Placement is overridden to point it at them instead.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task FireboxOrientsItsMouthTowardsWhoeverPlacesIt()
+    {
+        BlockPos at = P(8, 1, 10);
+
+        var cases = new (double dx, double dz, string expect)[]
+        {
+            (0, 4, "south"), (0, -4, "north"), (4, 0, "east"), (-4, 0, "west"),
+            (0.5, 4, "south"), (-0.5, -4, "north"),     // slightly off-axis stays put
+            (3.5, 1.0, "east"), (-3.5, -1.0, "west"),
+        };
+
+        foreach (var c in cases)
+        {
+            var got = BlockUpdraftFirebox.FacingTowards(at.X + 0.5 + c.dx, at.Z + 0.5 + c.dz, at);
+            Log($"observer at ({c.dx:+0.0;-0.0},{c.dz:+0.0;-0.0}) -> mouth faces {got.Code}");
+            Assert.Equal(c.expect, got.Code);
+        }
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// And the wiring: place one for real through the input system and check the mouth, the
+    /// derived body direction, and that the two agree.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task PlacingAFireboxForRealPointsItAtYou()
+    {
+        BlockPos ground = P(8, 0, 10);
+        BlockPos onTop = ground.UpCopy();
+        World.SetBlock("game:air", onTop);
+        await Ticks(4);
+
+        await Player.StandNear(P(8, 1, 13));           // standing to the SOUTH
+        await Ticks(8);
+        await Player.Hold("fornax:kilnfirebox-cold-north", 4);
+        await Ticks(4);
+
+        await Interact.UseBlock(ground, BlockFacing.UP);
+        await Ticks(6);
+
+        string placed = World.BlockCode(onTop);
+        var be = World.BEOrNull<BlockEntityUpdraftFirebox>(onTop);
+        Log($"placed from the south -> {placed}, body runs {be?.Orientation}");
+
+        Assert.Equal("fornax:kilnfirebox-cold-south", placed);
+        Assert.Equal(BlockFacing.NORTH, be.Orientation);
+    }
+
+    /// <summary>
+    /// The grate tile is eight voxels thick, so forming it should take more than one pass at
+    /// the clay. A single-layer recipe completes the moment you finish the outline and the
+    /// tiles just appear, which is not what shaping a floor tile should feel like.
+    /// </summary>
+    [VsTest]
+    public async Task GrateClayFormingIsMoreThanOneLayer()
+    {
+        var recipes = Sapi.GetClayformingRecipes()
+            .Where(r => r.Output?.ResolvedItemstack?.Collectible?.Code?.Domain == "fornax")
+            .ToList();
+
+        // clay-* with three allowed variants expands into one recipe per clay colour
+        Assert.Equal(3, recipes.Count);
+        var recipe = recipes[0];
+
+        // Voxels[x, y, z] - y is the layer. Count what is filled on each.
+        int layersUsed = 0, total = 0;
+        for (int y = 0; y < recipe.Voxels.GetLength(1); y++)
+        {
+            int onThisLayer = 0;
+            for (int x = 0; x < recipe.Voxels.GetLength(0); x++)
+                for (int z = 0; z < recipe.Voxels.GetLength(2); z++)
+                    if (recipe.Voxels[x, y, z]) onThisLayer++;
+
+            if (onThisLayer > 0) { layersUsed++; total += onThisLayer; }
+        }
+
+        int clay = Math.Max(1, (int)Math.Ceiling((total - 64) / 25f));
+        Log($"{layersUsed} layers, {total} voxels -> {clay} clay for {recipe.Output.Quantity} tiles");
+
+        Assert.Greater(layersUsed, 1, "forming a grate tile should take more than a single layer");
+        Assert.Equal(3, layersUsed);
+        Assert.Equal(3, recipe.Output.Quantity);
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// modinfo.json may only carry keys that ModInfo actually declares. The game tolerates
+    /// extras and loads the mod anyway, but ModDB parses strictly and refuses the upload with
+    /// "Unexpected property 'x' on modinfo.json" - so a bad key gets all the way to a released
+    /// zip before anything complains.
+    /// </summary>
+    [VsTest]
+    public async Task ModinfoCarriesOnlyKeysModInfoDeclares()
+    {
+        // Mod.SourcePath points at the loaded mod folder (or zip), which is where the real
+        // modinfo.json lives - the parsed ModInfo object cannot show us keys it ignored.
+        Mod mod = null;
+        foreach (var m in Sapi.ModLoader.Mods) if (m.Info?.ModID == "fornax") mod = m;
+        Assert.NotNull(mod);
+
+        string dir = mod.SourcePath;
+        if (System.IO.File.Exists(dir)) dir = System.IO.Path.GetDirectoryName(dir);
+        string file = System.IO.Path.Combine(dir, "modinfo.json");
+        Log("reading " + file);
+        Assert.True(System.IO.File.Exists(file), "cannot find modinfo.json at " + file);
+
+        string raw = System.IO.File.ReadAllText(file);
+
+        var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in typeof(ModInfo).GetMembers())
+        {
+            if (m is System.Reflection.PropertyInfo || m is System.Reflection.FieldInfo) declared.Add(m.Name);
+        }
+
+        var doc = Newtonsoft.Json.Linq.JObject.Parse(raw);
+        var unknown = new List<string>();
+        foreach (var prop in doc.Properties())
+        {
+            string k = prop.Name;
+            if (k.StartsWith("//")) continue;
+            if (!declared.Contains(k) && !declared.Contains(k.Replace("modid", "ModID"))) unknown.Add(k);
+        }
+
+        Log($"modinfo keys: {string.Join(", ", doc.Properties().Select(p => p.Name))}");
+        if (unknown.Count > 0) Log("NOT declared by ModInfo: " + string.Join(", ", unknown));
+        Assert.Equal(0, unknown.Count);
+        await Ticks(1);
+    }
+
+    // ------------------------------------------------------------------
+    //  Multiblock validation
+    // ------------------------------------------------------------------
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task CompleteStructureValidates()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        Assert.True(Be().StructureComplete, "a correctly built kiln should validate");
+    }
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task MissingVentBreaksTheStructure()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete);
+
+        World.SetBlock("game:air", Center().AddCopy(0, 5, 0));
+        await Tick3s();
+
+        Assert.True(!Be().StructureComplete, "removing the draft vent should invalidate the structure");
+    }
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task SquaringOffTheCorbelBreaksTheStructure()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete);
+
+        // fill a corner of the stepped-in course back out to the full 5x5
+        World.SetBlock(Wall, Fb().AddCopy(2, 4, 0));
+        await Tick3s();
+
+        Assert.True(!Be().StructureComplete, "the top course must corbel in, not stay square");
+    }
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task UnsealedEntranceBreaksTheStructure()
+    {
+        BuildKiln(sealEntrance: false);
+        await Ticks(2);
+        await Tick3s();
+
+        Assert.True(!Be().StructureComplete, "an open loading entrance should invalidate the structure");
+    }
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task CobIsAcceptedInPlaceOfMudBrick()
+    {
+        BuildKiln();
+        await Ticks(2);
+        World.SetBlock("game:cob-none", Fb().AddCopy(2, 0, -2));   // mid-wall, not a corner
+        await Tick3s();
+
+        Assert.True(Be().StructureComplete, "cob should be a legal wall material");
+    }
+
+    // ------------------------------------------------------------------
+    //  Firing
+    // ------------------------------------------------------------------
+
+    [VsTest(TimeoutMs = 180000)]
+    public async Task FiringConvertsGreenWaresAndCracksTheSeals()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.True(be.StructureComplete);
+        Assert.True(be.CanIgnite, "a complete, fuelled, unlit kiln should be ignitable");
+
+        be.TryIgnite(null);
+        Assert.True(be.Lit);
+
+        // A firewood batch needs ~13 in-game hours; give it plenty and tick it through.
+        for (int i = 0; i < 8 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        Assert.True(!be.Lit, "the firing should have finished and put itself out");
+
+        var gs = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        Assert.NotNull(gs.Inventory[0].Itemstack);
+        Assert.Equal("game:burnedbrick-gray", gs.Inventory[0].Itemstack.Collectible.Code.ToString());
+        Assert.Equal(8, gs.Inventory[0].Itemstack.StackSize);
+
+        Assert.Equal(Cracked, World.BlockCode(Fb().AddCopy(0, 2, 0)));
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    public async Task HotterFuelFiresTheSameBatchFaster()
+    {
+        BuildKiln();
+        Fuel("game:firewood", 40);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        await Hours(4);
+        await Tick3s();
+        double withWood = be.FiredEnergyHours;
+
+        // Same elapsed time, hotter fuel: charcoal burns at 1.3x where firewood burns at 0.6x.
+        World.SetBlock("game:air", Fb());
+        BuildKiln();
+        Fuel("game:charcoal", 40);
+        await Ticks(2);
+        await Tick3s();
+
+        be = Be();
+        be.TryIgnite(null);
+        await Hours(4);
+        await Tick3s();
+        double withCharcoal = be.FiredEnergyHours;
+
+        Log($"4h of firing: firewood {withWood:0.##} fuel-hours, charcoal {withCharcoal:0.##}");
+        Assert.Greater(withCharcoal, withWood);
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    public async Task FuelIsConsumedAsItBurns()
+    {
+        BuildKiln();
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        int before = be.FuelItemCount();
+        be.TryIgnite(null);
+
+        await Hours(6);
+        await Tick3s();
+
+        Log($"fuel {before} -> {be.FuelItemCount()} after 6h");
+        Assert.Less(be.FuelItemCount(), before);
+    }
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ColdFuelIsRefused()
+    {
+        BuildKiln();
+        await Ticks(2);
+
+        var be = Be();
+        // Dry grass burns at 600C, below the 650C floor.
+        Assert.True(!be.IsValidFuel(World.Stack("game:drygrass", 4)), "dry grass is too cool to fire a kiln");
+        Assert.True(be.IsValidFuel(World.Stack("game:firewood", 1)));
+        Assert.True(be.IsValidFuel(World.Stack("game:charcoal", 1)));
+        Assert.True(be.IsValidFuel(World.Stack("game:peatbrick", 1)));
+    }
+
+
+    // ------------------------------------------------------------------
+    //  Lighting it, the way a player actually does
+    // ------------------------------------------------------------------
+
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task PlayerCanFuelAndLightTheKiln()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.True(be.StructureComplete, "structure should be complete before we try to light it");
+
+        // 1. put fuel in the way a player does: hold it, right-click the firebox
+        await Player.StandNear(Fb().AddCopy(0, 0, 2));
+        await Player.Hold("game:firewood", 16);
+        await Ticks(2);
+
+        bool handled = be.OnPlayerInteract(Player.Me);
+        await Ticks(2);
+        Log($"fuel interaction handled={handled}, fuel now {be.FuelItemCount()}");
+        Assert.True(be.FuelItemCount() > 0, "right-clicking with firewood should load the firebox");
+
+        // 2. now the ignite path the firestarter takes
+        Assert.True(be.CanIgnite, "a complete, fuelled, unlit kiln must report CanIgnite");
+
+        var block = World.GetBlock(Fb()) as BlockUpdraftFirebox;
+        Assert.NotNull(block);
+
+        var state0 = block.OnTryIgniteBlock(Player.Me.Entity, Fb(), 0f);
+        var state2 = block.OnTryIgniteBlock(Player.Me.Entity, Fb(), 2f);
+        Log($"OnTryIgniteBlock: at 0s={state0}, at 2s={state2}");
+
+        // ItemFirestarter bails unless the very first probe returns exactly Ignitable
+        Assert.Equal(EnumIgniteState.Ignitable, state0);
+        Assert.Equal(EnumIgniteState.IgniteNow, state2);
+
+        var handling = EnumHandling.PassThrough;
+        block.OnTryIgniteBlockOver(Player.Me.Entity, Fb(), 2f, ref handling);
+        await Ticks(2);
+
+        Assert.True(be.Lit, "the kiln should be lit after a completed firestarter use");
+    }
+
+    /// <summary>
+    /// The same thing again, but driven entirely through the input system: aim at the firebox
+    /// and hold right-click with a firestarter, exactly as a player does. The direct-call test
+    /// above can pass while this one fails, because the real path goes through
+    /// Block.OnBlockInteractStart first and only reaches ItemFirestarter if that declines.
+    /// </summary>
+    [VsTest(TimeoutMs = 240000)]
+    [RequiresClient]
+    public async Task LightingItWithARealFirestarterWorks()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.True(be.StructureComplete);
+
+        await Player.StandNear(Fb().AddCopy(0, 0, 3));
+        await Ticks(5);
+
+        await Player.Hold("game:firewood", 16);
+        await Ticks(5);
+        await Interact.UseBlock(Fb(), BlockFacing.SOUTH);
+        await Ticks(5);
+        Log($"after right-clicking with firewood: fuel={be.FuelItemCount()}");
+        Assert.True(be.FuelItemCount() > 0, "right-clicking the firebox with firewood should load it");
+
+        // What does the CLIENT think? ItemFirestarter probes the client-side block entity
+        // first, and gives up for good unless that one says Ignitable.
+        await OnClient();
+        var cbe = Vs.Capi.World.BlockAccessor.GetBlockEntity(Fb()) as BlockEntityUpdraftFirebox;
+        string clientState = cbe == null
+            ? "client BE MISSING"
+            : $"lit={cbe.Lit} complete={cbe.StructureComplete} fuel={cbe.FuelItemCount()} canIgnite={cbe.CanIgnite}";
+        await OnServer();
+        Log("client sees: " + clientState);
+        Log($"server sees: lit={be.Lit} complete={be.StructureComplete} fuel={be.FuelItemCount()} canIgnite={be.CanIgnite}");
+
+        // ItemFirestarter.OnHeldInteractStop rolls world.Rand and gives up 75% of the time,
+        // so a single hold proves nothing either way. This is vanilla and applies to firepits
+        // too - a player just holds it again. Twenty attempts fail together ~0.3% of the time.
+        await Player.Hold("game:firestarter", 1);
+        await Ticks(5);
+
+        int attempts = 0;
+        for (; attempts < 20 && !be.Lit; attempts++)
+        {
+            await Interact.UseBlock(Fb(), BlockFacing.SOUTH, holdFrames: 150);
+            await Ticks(4);
+        }
+
+        Log($"lit={be.Lit} after {attempts} firestarter attempt(s)");
+        Assert.True(be.Lit, "holding a firestarter on the firebox should light the kiln");
+    }
+
+    /// <summary>
+    /// A lit torch is the reliable way in: BlockBehaviorCanIgnite wants a three second hold
+    /// but rolls no dice, where the firestarter is 1.5s with a 25% chance. An UNLIT torch has
+    /// no CanIgnite behaviour at all and does nothing, which is an easy thing to be caught by.
+    /// </summary>
+    [VsTest(TimeoutMs = 240000)]
+    [RequiresClient]
+    public async Task ALitTorchLightsItToo()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 8);
+        be.Inventory[0].MarkDirty();
+        be.MarkDirty(true);
+        await Ticks(5);
+        Assert.True(be.CanIgnite);
+
+        await Player.StandNear(Fb().AddCopy(0, 0, 3));
+        await Player.Hold("game:torch-basic-lit-up", 1);
+        await Ticks(5);
+
+        // needs secondsUsed >= 3, so hold well past that
+        await Interact.UseBlock(Fb(), BlockFacing.SOUTH, holdFrames: 300);
+        await Ticks(10);
+
+        Log($"after a lit torch: lit={be.Lit}");
+        Assert.True(be.Lit, "a lit torch held on the firebox should light the kiln");
+    }
+
+
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AnIncompleteKilnRefusesToLightAndSaysWhy()
+    {
+        BuildKiln(sealEntrance: false);        // entrance left open
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 8);
+        be.Inventory[0].MarkDirty();
+
+        Assert.True(!be.StructureComplete);
+        Assert.True(!be.CanIgnite, "an unsealed kiln must not light");
+
+        var block = World.GetBlock(Fb()) as BlockUpdraftFirebox;
+        var state = block.OnTryIgniteBlock(Player.Me.Entity, Fb(), 0f);
+        Log("unsealed kiln ignite probe: " + state);
+        Assert.Equal(EnumIgniteState.NotIgnitablePreventDefault, state);
+
+        // and with no fuel at all, once it is sealed
+        BuildKiln();
+        be.Inventory[0].Itemstack = null;
+        be.Inventory[0].MarkDirty();
+        await Tick3s();
+
+        Assert.True(be.StructureComplete);
+        Assert.True(!be.CanIgnite, "a fuelless kiln must not light");
+        Assert.Equal(EnumIgniteState.NotIgnitablePreventDefault,
+            block.OnTryIgniteBlock(Player.Me.Entity, Fb(), 0f));
+    }
+
+
+    /// <summary>
+    /// A firing kiln has to look like one from the outside. The flames are sealed inside the
+    /// chamber where nothing can see them, so lighting it swaps the firebox and the vent to
+    /// variants that emit light, glow, and carry the plume - and putting it out swaps back.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task LightingItChangesHowItLooksFromOutside()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        BlockPos ventPos = Center().AddCopy(0, 5, 0);
+        Assert.Equal("fornax:kilnvent-idle", World.BlockCode(ventPos));
+        Assert.Equal(Firebox, World.BlockCode(Fb()));
+        Assert.Equal(0, (int)World.GetBlock(Fb()).LightHsv[2]);
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].MarkDirty();
+        be.TryIgnite(null);
+        await Ticks(4);
+
+        Assert.Equal("fornax:kilnfirebox-warming-south", World.BlockCode(Fb()));
+        Assert.Equal("fornax:kilnvent-drafting", World.BlockCode(ventPos));
+
+        var lit = World.GetBlock(Fb());
+        Log($"lit firebox: light={lit.LightHsv[0]},{lit.LightHsv[1]},{lit.LightHsv[2]} particles={lit.ParticleProperties?.Length ?? 0}");
+        Assert.Greater((int)lit.LightHsv[2], 0, "a lit firebox must emit light");
+        Assert.Greater(lit.ParticleProperties?.Length ?? 0, 0, "a lit firebox must declare particles");
+
+        var vent = World.GetBlock(ventPos);
+        Log($"drafting vent: particles={vent.ParticleProperties?.Length ?? 0}");
+        Assert.Greater(vent.ParticleProperties?.Length ?? 0, 0, "a drafting vent must declare a plume");
+
+        // exchanging the firebox must not have thrown the fuel or the progress away
+        Assert.NotNull(World.BEOrNull<BlockEntityUpdraftFirebox>(Fb()));
+        Assert.True(Be().Lit);
+        Assert.True(Be().FuelItemCount() > 0, "swapping the block must keep the fuel");
+
+        // and it all goes back when the firing ends
+        for (int i = 0; i < 10 && Be().Lit; i++) { await Hours(3); await Tick3s(); }
+        Assert.True(!Be().Lit);
+        Assert.Equal("fornax:kilnvent-idle", World.BlockCode(ventPos));
+
+        // 16 firewood is 32 fuel-hours against a 20 fuel-hour batch, so fuel is left over
+        // and it settles on "ready" rather than "cold"
+        Log("after the firing: " + World.BlockCode(Fb()) + ", fuel left=" + Be().FuelItemCount());
+        Assert.Equal("fornax:kilnfirebox-ready-south", World.BlockCode(Fb()));
+        Assert.Equal(0, (int)World.GetBlock(Fb()).LightHsv[2]);
+    }
+
+
+    /// <summary>
+    /// Block particles hang off Block.TopMiddlePos, which is the block's TOP face - and the
+    /// firebox's top face is buried under the wall course above it. Particles declared without
+    /// compensating for that spawn inside solid stone and are never seen. Rendering cannot be
+    /// photographed in this harness (a vanilla lit firepit photographs no flames either), so
+    /// this checks the thing that IS checkable: where the engine will put them.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task ParticlesSpawnInOpenAirNotInsideTheStructure()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].MarkDirty();
+        be.TryIgnite(null);
+        await Ticks(4);
+
+        CheckSpawns(Fb(), "firebox");
+        CheckSpawns(Center().AddCopy(0, 5, 0), "vent");
+    }
+
+    private static void CheckSpawns(BlockPos pos, string what)
+    {
+        var block = World.GetBlock(pos);
+        Assert.NotNull(block.ParticleProperties);
+        Assert.Greater(block.ParticleProperties.Length, 0, what + " declares no particles");
+
+        for (int i = 0; i < block.ParticleProperties.Length; i++)
+        {
+            var pp = block.ParticleProperties[i];
+            if (pp.Quantity.avg <= 0) continue;      // registration placeholder
+
+            // exactly what Block.OnAsyncClientParticleTick does
+            double x = pos.X + block.TopMiddlePos.X + pp.PosOffset[0].avg;
+            double y = pos.Y + block.TopMiddlePos.Y + pp.PosOffset[1].avg;
+            double z = pos.Z + block.TopMiddlePos.Z + pp.PosOffset[2].avg;
+
+            var at = new BlockPos((int)Math.Floor(x), (int)Math.Floor(y), (int)Math.Floor(z), pos.dimension);
+            var hit = World.GetBlock(at);
+            Log($"{what}[{i}] spawns at {x:0.00},{y:0.00},{z:0.00} -> {hit.Code}");
+
+            Assert.True(hit.Id == 0 || hit.CollisionBoxes == null || hit.CollisionBoxes.Length == 0,
+                $"{what} particle group {i} spawns inside {hit.Code} at {at} - nothing will ever be seen");
+        }
+    }
+
+
+    /// <summary>cold = empty, ready = fuelled and waiting, lit = firing.</summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task FireboxShowsWhetherItIsEmptyFuelledOrFiring()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.Equal("fornax:kilnfirebox-cold-south", World.BlockCode(Fb()));
+
+        var be = Be();
+
+        // a player shoving fuel in should flip it to "ready" straight away
+        await Player.Hold("game:firewood", 16);
+        be.OnPlayerInteract(Player.Me);
+        await Ticks(2);
+        Assert.Equal("fornax:kilnfirebox-ready-south", World.BlockCode(Fb()));
+        Assert.Equal(0, (int)World.GetBlock(Fb()).LightHsv[2]);
+
+        Be().TryIgnite(null);
+        await Ticks(2);
+        Assert.Equal("fornax:kilnfirebox-warming-south", World.BlockCode(Fb()));
+        Assert.Greater((int)World.GetBlock(Fb()).LightHsv[2], 0);
+
+        // burn it out: no fuel left means it must land on cold, not ready
+        for (int i = 0; i < 15 && Be().Lit; i++) { await Hours(3); await Tick3s(); }
+        Assert.True(!Be().Lit);
+        Log("after burning out: " + World.BlockCode(Fb()) + ", fuel=" + Be().FuelItemCount());
+        Assert.Equal("fornax:kilnfirebox-cold-south", World.BlockCode(Fb()));
+    }
+
+    /// <summary>
+    /// The firebox goes red-and-smoky while the chamber comes up, then bright orange once it
+    /// is hot. The colour change lands on the shatter threshold on purpose: when it turns, the
+    /// kiln has become expensive to open.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task FireboxLooksDifferentWarmingUpThanFiring()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].MarkDirty();
+        be.TryIgnite(null);
+        await Ticks(2);
+
+        Assert.Equal("fornax:kilnfirebox-warming-south", World.BlockCode(Fb()));
+        var warming = World.GetBlock(Fb());
+        Log($"warming: light={warming.LightHsv[0]},{warming.LightHsv[1]},{warming.LightHsv[2]} temp={Be().ChamberTemperature:0}");
+
+        // heat it past the threshold
+        while (Be().Lit && Be().ChamberTemperature < 500) { await Hours(1); await Tick3s(); }
+
+        Assert.Equal("fornax:kilnfirebox-firing-south", World.BlockCode(Fb()));
+        var firing = World.GetBlock(Fb());
+        Log($"firing:  light={firing.LightHsv[0]},{firing.LightHsv[1]},{firing.LightHsv[2]} temp={Be().ChamberTemperature:0}");
+
+        // a genuine difference in both hue and brightness, not just one of them
+        Assert.True(warming.LightHsv[0] != firing.LightHsv[0], "warming and firing should differ in hue");
+        Assert.Greater((int)firing.LightHsv[2], (int)warming.LightHsv[2]);
+        Assert.Greater((int)warming.LightHsv[2], 0, "warming should still glow a little");
+    }
+
+    /// <summary>A sealed, burning kiln is not something you can reach into.</summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task FuelCannotBeAddedOrRemovedWhileFiring()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        await Player.Hold("game:firewood", 16);
+        be.OnPlayerInteract(Player.Me);
+        await Ticks(2);
+
+        int loaded = be.FuelItemCount();
+        Assert.True(loaded > 0);
+
+        be.TryIgnite(null);
+        await Ticks(2);
+        Assert.True(be.Lit);
+
+        // adding more is refused, and the click is swallowed rather than falling through
+        await Player.Hold("game:firewood", 16);
+        bool handled = be.OnPlayerInteract(Player.Me);
+        await Ticks(2);
+        Log($"refuel while firing: handled={handled}, fuel {loaded} -> {be.FuelItemCount()}");
+        Assert.True(handled, "the interaction should be consumed, not passed on");
+        Assert.Equal(loaded, be.FuelItemCount());
+
+        // and so is taking it back out. Emptying the hand and holding shift is what
+        // actually reaches the unload branch - without the sneak it would fall through
+        // to the status readout and pass for the wrong reason.
+        var hand = Player.Me.InventoryManager.ActiveHotbarSlot;
+        hand.Itemstack = null;
+        hand.MarkDirty();
+        Player.Me.WorldData.EntityControls.ShiftKey = true;
+        await Ticks(2);
+
+        int before = be.FuelItemCount();
+        bool unloadHandled = be.OnPlayerInteract(Player.Me);
+        await Ticks(2);
+        Player.Me.WorldData.EntityControls.ShiftKey = false;
+
+        Log($"unload while firing: handled={unloadHandled}, fuel {before} -> {be.FuelItemCount()}");
+        Assert.True(unloadHandled);
+        Assert.Equal(before, be.FuelItemCount());
+
+        // once it is out, the fuel is reachable again
+        be.Lit = false;
+        be.RefreshAppearance();
+        Player.Me.WorldData.EntityControls.ShiftKey = true;
+        be.OnPlayerInteract(Player.Me);
+        await Ticks(2);
+        Player.Me.WorldData.EntityControls.ShiftKey = false;
+        Log($"unload once out: fuel {before} -> {be.FuelItemCount()}");
+        Assert.Less(be.FuelItemCount(), before);
+    }
+
+    [VsTest(TimeoutMs = 120000)]
+    [RequiresClient]
+    public async Task BlockInfoOnlyMentionsFuelWhenItIsShort()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 2);
+        be.Inventory[0].MarkDirty();
+        var dsc = new System.Text.StringBuilder();
+        be.GetBlockInfo(Player.Me, dsc);
+        Log("2 firewood -> " + dsc.ToString().Replace("\n", " | ").Trim());
+        Assert.Contains(dsc.ToString(), "%");
+
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].MarkDirty();
+        dsc.Clear();
+        be.GetBlockInfo(Player.Me, dsc);
+        string plenty = dsc.ToString();
+        Log("16 firewood -> " + plenty.Replace("\n", " | ").Trim());
+        Assert.True(!plenty.Contains("enough"), "no line at all when the fuel will see the batch out");
+        Assert.True(!plenty.Contains("%"), "and no percentage either");
+        await Ticks(1);
+    }
+
+    // ------------------------------------------------------------------
+    //  Build guide
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Drop a firebox on its own and the guide should ghost in the entire rest of the kiln;
+    /// finish the kiln and there should be nothing left to show.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task BuildGuideGhostsInEverythingStillToPlace()
+    {
+        // a lone firebox, nothing else
+        World.SetBlock(Firebox, Fb());
+        await Ticks(4);
+
+        var be = Be();
+        Assert.NotNull(be);
+
+        var colors = new System.Collections.Generic.List<int>();
+        var wanted = new System.Collections.Generic.List<Block>();
+        var missing = be.MissingStructurePositions(colors, wanted);
+        Log($"lone firebox -> {missing.Count} blocks ghosted, {colors.Count} colours, {wanted.Count} blocks");
+
+        // Every ghost must name a real block to draw, or the guide shows a shape with no
+        // identity - which is the whole point of it.
+        var byName = new System.Collections.Generic.Dictionary<string, int>();
+        for (int i = 0; i < wanted.Count; i++)
+        {
+            Assert.NotNull(wanted[i]);
+            Assert.True(wanted[i].Id != 0, $"ghost {i} at {missing[i]} resolved to air");
+            string code = wanted[i].Code.ToString();
+            byName[code] = byName.TryGetValue(code, out var n) ? n + 1 : 1;
+        }
+        foreach (var kv in byName) Log($"   {kv.Value,3} x {kv.Key}");
+
+        Assert.Equal(66, byName["game:mudbrick-dark"]);
+        Assert.Equal(9, byName["fornax:kilngrate"]);
+        Assert.Equal(6, byName["fornax:kilnseal-intact"]);
+        Assert.Equal(1, byName["fornax:kilnvent-idle"]);
+
+        // Of the 134 structure positions: the firebox is already right, and the 42 air and
+        // 9 ware positions are already air, so what is ghosted is exactly what you must
+        // build - 66 walls + 9 grate tiles + 6 mud seals + 1 vent.
+        Assert.Equal(missing.Count, colors.Count);
+        Assert.Equal(66 + 9 + 6 + 1, missing.Count);
+
+        // every ghost must sit inside the kiln's footprint
+        foreach (var p in missing)
+        {
+            Assert.InRange(p.X - Fb().X, -2, 2);
+            Assert.InRange(p.Y - Fb().Y, 0, 5);
+            Assert.InRange(p.Z - Fb().Z, -4, 0);
+        }
+
+        // build it properly and the guide should have nothing to say
+        BuildKiln();
+        await Ticks(4);
+        var left = Be().MissingStructurePositions();
+        Log($"finished kiln -> {left.Count} blocks ghosted");
+        Assert.Equal(0, left.Count);
+    }
+
+    /// <summary>An obstruction in the chamber is a different problem from an unbuilt wall.</summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task BuildGuideFlagsThingsInTheWay()
+    {
+        BuildKiln();
+        await Ticks(4);
+        Assert.Equal(0, Be().MissingStructurePositions().Count);
+
+        // drop a block into the ware chamber, which has to stay clear
+        World.SetBlock(Wall, Ware(0, 0));
+        await Ticks(4);
+
+        var colors = new System.Collections.Generic.List<int>();
+        var missing = Be().MissingStructurePositions(colors);
+        Log($"blocked chamber -> {missing.Count} flagged at {missing[0]}");
+
+        Assert.Equal(1, missing.Count);
+        Assert.Equal(Ware(0, 0), missing[0]);
+        // flagged red, unlike anything merely unbuilt
+        Assert.Equal(ColorUtil.ColorFromRgba(215, 70, 70, 130), colors[0]);
+    }
+
+    // ------------------------------------------------------------------
+    //  Handbook
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The handbook page exists, and every handbooksearch:// link in it actually names
+    /// something in the game. A dead link renders as a link and simply finds nothing, so
+    /// there is no way to notice one by reading the page.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task HandbookEntryResolvesAllOfItsLinks()
+    {
+        // Read the page config the game reads, so a mismatch between it and the lang file
+        // fails here rather than rendering the raw key in-game.
+        var page = Sapi.Assets.TryGet("fornax:config/handbook/50-fornax.json")
+            ?.ToObject<Dictionary<string, string>>();
+        Assert.NotNull(page);
+
+        string title = Lang.Get(page["title"]);
+        string text = Lang.Get(page["text"]);
+        Log($"page title key = {page["title"]}");
+
+        Assert.True(!title.Contains("gamemechanicinfo"), "title lang key is missing");
+        Assert.True(!text.Contains("gamemechanicinfo"), "text lang key is missing");
+        Assert.Greater(text.Length, 1000, "handbook page looks too thin");
+        Assert.Contains(text, "<strong>Updraft Kiln</strong>");
+
+        // Every display name in the game. GetMatching, not Get: names are often declared
+        // with wildcard keys (block-kilnfirebox-cold-*) which a literal Get will not resolve.
+        var names = new System.Collections.Generic.HashSet<string>();
+        foreach (var b in Sapi.World.Blocks)
+        {
+            if (b?.Code == null) continue;
+            names.Add(Lang.GetMatching(b.Code.Domain + ":block-" + b.Code.Path).ToLowerInvariant());
+        }
+        foreach (var i in Sapi.World.Items)
+        {
+            if (i?.Code == null) continue;
+            names.Add(Lang.GetMatching(i.Code.Domain + ":item-" + i.Code.Path).ToLowerInvariant());
+        }
+
+        var links = System.Text.RegularExpressions.Regex.Matches(text, "handbooksearch://([^\"]+)");
+        Assert.Greater(links.Count, 5, "expected the page to cross-link the parts");
+
+        var dead = new System.Collections.Generic.List<string>();
+        foreach (System.Text.RegularExpressions.Match m in links)
+        {
+            string term = m.Groups[1].Value.ToLowerInvariant();
+            bool found = false;
+            foreach (var n in names) if (n.Contains(term)) { found = true; break; }
+            if (!found) dead.Add(term);
+        }
+
+        Log($"{links.Count} handbook links checked, {dead.Count} dead");
+        if (dead.Count > 0) Log("dead: " + string.Join(", ", dead));
+        Assert.Equal(0, dead.Count);
+        await Ticks(1);
+    }
+
+    // ------------------------------------------------------------------
+    //  Thermal shock
+    // ------------------------------------------------------------------
+
+    [VsTest(TimeoutMs = 180000)]
+    public async Task BreachingAColdKilnCostsNothing()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 16);
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        await Tick3s();   // barely any heat yet
+
+        Log($"chamber at breach: {be.ChamberTemperature:0}C");
+        Assert.Less(be.ChamberTemperature, 450f);
+
+        World.SetBlock("game:air", Fb().AddCopy(0, 2, 0));   // pull a seal
+        await Tick3s();
+
+        var gs = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        Assert.Equal(16, gs.Inventory[0].Itemstack.StackSize);
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    public async Task BreachingAHotKilnShattersSomeWares()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 64);
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        await Hours(4);
+        await Tick3s();
+
+        Log($"chamber before breach: {be.ChamberTemperature:0}C");
+        Assert.Greater(be.ChamberTemperature, 450f);
+
+        World.SetBlock("game:air", Fb().AddCopy(0, 2, 0));
+        await Tick3s();
+
+        var gs = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        int left = gs.Inventory[0].Itemstack?.StackSize ?? 0;
+
+        Log($"64 raw bricks -> {left} survived a breach at {be.ChamberTemperature:0}C");
+        Assert.Less(left, 64);
+        Assert.Greater(left, 0);
+        Assert.True(!be.StructureComplete, "a breached kiln should be paused");
+    }
+}
+
+/// <summary>
+/// Everything above runs headless, where the game never builds a mesh. These do, because a
+/// mistyped texture or shape path is invisible until something tries to draw it.
+/// </summary>
+public class FornaxVisualTests
+{
+    private const string Wall = "game:mudbrick-dark";
+    private const string Grate = "fornax:kilngrate";
+    private const string Seal = "fornax:kilnseal-intact";
+    private const string Vent = "fornax:kilnvent-idle";
+    private const string Firebox = "fornax:kilnfirebox-cold-south";
+
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task WarmingAndFiringSideBySide()
+    {
+        await World.SetCalendarTo(500 * 24 + 22);   // late evening, so the glow tells
+
+        string[] codes = {
+            "fornax:kilnfirebox-cold-north",
+            "fornax:kilnfirebox-ready-north",
+            "fornax:kilnfirebox-warming-north",
+            "fornax:kilnfirebox-firing-north"
+        };
+        for (int i = 0; i < codes.Length; i++) World.SetBlock(codes[i], P(5 + i * 2, 1, 10));
+
+        await Ticks(10);
+        await Player.Teleport(P(8, 2, 4));
+        await Ticks(10);
+        await Interact.LookAt(P(8, 1, 10));
+        await Frames.Wait(60);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "firebox-states.png"));
+        Log("cold / ready / warming / firing: " + path);
+        Assert.NotNull(path);
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task RawAndFiredGrateTilesLookLikeTheSameObject()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        // fired tiles placed as blocks
+        World.SetBlock("fornax:kilngrate", P(6, 1, 10));
+        World.SetBlock("fornax:kilngrate", P(7, 1, 10));
+
+        // raw tiles as a ground pile, and a single one
+        foreach (var (pos, n) in new[] { (P(9, 1, 10), 8), (P(11, 1, 10), 1) })
+        {
+            World.SetBlock("game:groundstorage", pos);
+            var gs = World.BEOrNull<BlockEntityGroundStorage>(pos);
+            if (gs == null) continue;
+            gs.Inventory[0].Itemstack = World.Stack("fornax:kilngrateraw", n);
+            gs.Inventory[0].MarkDirty();
+            gs.MarkDirty(true);
+        }
+
+        await Ticks(10);
+        await Player.Teleport(P(8, 2, 5));
+        await Ticks(10);
+        await Interact.LookAt(P(8, 1, 10));
+        await Frames.Wait(60);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "grate-tiles.png"));
+        Log("fired blocks / raw pile of 8 / single raw: " + path);
+        Assert.NotNull(path);
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task GrateTopDownAgainstVanillaGrating()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        // Hollow out under the two placed blocks only, so their slots have somewhere dark
+        // to show through. Ground storage needs something to rest on, so it stays on turf.
+        foreach (var x in new[] { 3, 6 })
+        {
+            for (int y = -1; y >= -3; y--) World.SetBlock("game:air", P(x, y, 10));
+        }
+        World.SetBlock("fornax:kilngrate", P(3, 0, 10));
+        World.SetBlock("game:refractorybrickgrating-good-tier1", P(6, 0, 10));
+
+        foreach (var (x, n) in new[] { (9, 1), (11, 3), (13, 8) })
+        {
+            World.SetBlock("game:groundstorage", P(x, 1, 10));
+            var gs = World.BEOrNull<BlockEntityGroundStorage>(P(x, 1, 10));
+            if (gs == null) { Log($"no ground storage at x={x}"); continue; }
+            gs.Inventory[0].Itemstack = World.Stack("fornax:kilngrateraw", n);
+            gs.Inventory[0].MarkDirty();
+            gs.MarkDirty(true);
+        }
+
+        await Ticks(10);
+        await Player.Teleport(P(8, 3, 14));
+        await Ticks(10);
+        await Interact.LookAt(P(8, 1, 10));
+        await Frames.Wait(60);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "grate-topdown.png"));
+        Log("fired / vanilla grating / raw x1 / raw x3 / raw x8: " + path);
+        Assert.NotNull(path);
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    [PlotSize(24, 32)]
+    public async Task BuildGuideGhostRenders()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        BlockPos fb = P(12, 1, 14);
+        World.SetBlock("fornax:kilnfirebox-cold-south", fb);
+        await Ticks(6);
+
+        var be = World.BE<BlockEntityUpdraftFirebox>(fb);
+        await OnClient();
+        var cbe = Vs.Capi.World.BlockAccessor.GetBlockEntity(fb) as BlockEntityUpdraftFirebox;
+        cbe?.ToggleBuildGuide(Vs.Capi.World.Player);
+        await OnServer();
+
+        await Ticks(10);
+        await Player.Teleport(P(12, 3, 22));
+        await Ticks(10);
+        await Interact.LookAt(P(12, 3, 14));
+        await Frames.Wait(60);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "build-guide.png"));
+        Log($"ghost of {be.MissingStructurePositions().Count} blocks: {path}");
+        Assert.NotNull(path);
+    }
+
+    /// <summary>
+    /// Puts every one of the mod's items in the hotbar and photographs it, so the inventory
+    /// icons can actually be looked at. A wrong guiTransform is invisible from code - the block
+    /// is perfectly valid, it just renders flat or overflowing its slot.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task InventoryIconsRenderInTheSlot()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        string[] codes = {
+            // The north variant is what you craft and what drops, and at the default block
+            // gui transform it happens to present its mouth to the viewer - so it reads as a
+            // firebox rather than as a plain mud brick cube.
+            "fornax:kilnfirebox-cold-north",
+            "fornax:kilnvent-idle",
+            "fornax:kilngrate",
+            "fornax:kilnseal-intact",
+            "fornax:kilngrateraw",
+            "game:mudbrick-dark",
+        };
+
+        var hotbar = Player.Me.InventoryManager.GetHotbarInventory();
+        for (int i = 0; i < codes.Length; i++)
+        {
+            var stack = World.Stack(codes[i], 4);
+            Assert.NotNull(stack);
+            hotbar[i].Itemstack = stack;
+            hotbar[i].MarkDirty();
+        }
+
+        await Ticks(10);
+        await Frames.Wait(40);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "inventory-icons.png"));
+        Log("firebox / vent / grate / seal / raw tile / vanilla mudbrick: " + path);
+        Assert.NotNull(path);
+    }
+
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task EveryKilnBlockDrawsWithARealTexture()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        string[] codes = { "fornax:kilnfirebox-firing-north", Grate, Seal, Vent, "fornax:kilnseal-cracked" };
+        for (int i = 0; i < codes.Length; i++)
+        {
+            World.SetBlock(codes[i], P(4 + i * 2, 1, 10));
+        }
+
+        await Ticks(4);
+        await Player.Teleport(P(8, 2, 4));
+        await Ticks(10);
+        await Interact.LookAt(P(8, 1, 10));
+        await Frames.Wait(30);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "updraft-blocks.png"));
+
+        Log($"block row screenshot: {path}");
+        Assert.NotNull(path);
+    }
+
+    [VsTest(TimeoutMs = 240000)]
+    [RequiresClient]
+    [PlotSize(40, 32)]
+    public async Task AssembledKilnRendersAndFires()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        BlockPos f = P(20, 1, 16);
+        FornaxTests.Build(f);
+
+        var be = World.BE<BlockEntityUpdraftFirebox>(f);
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].MarkDirty();
+
+        await Ticks(4);
+        for (int i = 0; i < 3; i++) await World.TickNow(f);
+
+        Assert.True(be.StructureComplete, "the assembled kiln should validate on the client run too");
+        be.TryIgnite(null);
+        be.MarkDirty(true);
+
+        await Ticks(150);          // let the client sync Lit and the smoke plume build
+        await Player.Teleport(P(10, 3, 31));
+        await Ticks(10);
+        await Interact.LookAt(P(20, 4, 16));
+        await Frames.Wait(90);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "updraft-kiln-lit.png"));
+
+        Log($"assembled kiln screenshot: {path}");
+        Assert.NotNull(path);
+    }
+
+    [VsTest(TimeoutMs = 300000)]
+    [RequiresClient]
+    [PlotSize(90, 32)]
+    public async Task ShowcaseRowRenders()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        // Same seven stages the showcase world ships: ground course, grate, wares,
+        // flue, corbel, capped, then sealed and firing.
+        const int pitch = 9;
+        for (int i = 0; i < 7; i++)
+        {
+            BlockPos f = P(12 + i * pitch, 1, 20);
+            int upto = Math.Min(i, 5);
+            BuildStage(f, upto, sealIt: i == 6);
+
+            if (i >= 2)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dz = -1; dz >= -3; dz--)
+                    {
+                        BlockPos wp = f.AddCopy(dx, 2, dz);
+                        World.SetBlock("game:groundstorage", wp);
+                        var gs = World.BEOrNull<BlockEntityGroundStorage>(wp);
+                        if (gs == null) continue;
+                        gs.Inventory[0].Itemstack = World.Stack("game:rawbrick-blue", 12);
+                        gs.Inventory[0].MarkDirty();
+                        gs.MarkDirty(true);
+                    }
+                }
+            }
+
+            if (i == 6)
+            {
+                var be = World.BE<BlockEntityUpdraftFirebox>(f);
+                be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+                be.Inventory[0].MarkDirty();
+                await Tick3s(f);
+                be.TryIgnite(null);
+                be.MarkDirty(true);
+            }
+        }
+
+        // The harness client runs at viewDistance 32 and this row is 63 wide, so the
+        // far end simply is not sent to the client at the distance you need to stand.
+        await OnClient();
+        Vs.Capi.Settings.Int["viewDistance"] = 192;
+        await OnServer();
+
+        await Ticks(60);
+        await Player.Teleport(P(39, 3, 62));
+        await Ticks(30);
+        await Interact.LookAt(P(39, 4, 20));
+        await Frames.Wait(90);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "updraft-stages.png"));
+
+        Log("stage row screenshot: " + path);
+        Assert.NotNull(path);
+    }
+
+    /// <summary>Builds the kiln only up to course <paramref name="upto"/>, for the stage row.</summary>
+    private static void BuildStage(BlockPos f, int upto, bool sealIt)
+    {
+        for (int y = 0; y <= Math.Min(upto, 3); y++)
+        {
+            for (int dx = -2; dx <= 2; dx++)
+            {
+                for (int dz = 0; dz >= -4; dz--)
+                {
+                    bool isCorner = Math.Abs(dx) == 2 && (dz == 0 || dz == -4);
+                    bool perim = Math.Abs(dx) == 2 || dz == 0 || dz == -4;
+                    string code;
+                    if (isCorner && y >= 2) code = "game:air";
+                    else if (perim)
+                    {
+                        if (y == 0 && dx == 0 && dz == 0) code = Firebox;
+                        else if ((y == 2 || y == 3) && dz == 0 && Math.Abs(dx) <= 1) code = sealIt ? Seal : "game:air";
+                        else code = Wall;
+                    }
+                    else
+                    {
+                        if (y == 0) code = (dx == 0 && dz == -2) ? Wall : "game:air";
+                        else if (y == 1) code = Grate;
+                        else code = "game:air";
+                    }
+                    World.SetBlock(code, f.AddCopy(dx, y, dz));
+                }
+            }
+        }
+
+        if (upto >= 4)
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz >= -3; dz--)
+                    World.SetBlock((dx == 0 && dz == -2) ? "game:air" : Wall, f.AddCopy(dx, 4, dz));
+
+        if (upto >= 5)
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz >= -3; dz--)
+                    World.SetBlock((dx == 0 && dz == -2) ? Vent : Wall, f.AddCopy(dx, 5, dz));
+    }
+
+    private static async Task Tick3s(BlockPos pos)
+    {
+        for (int i = 0; i < 3; i++) await World.TickNow(pos);
+    }
+}
+
+/// <summary>
+/// Control experiment: can this harness photograph engine-spawned block particles at all?
+/// A lit vanilla firepit is known-good, so if its flames do not appear here, no screenshot
+/// of our own particles proves anything either way.
+/// </summary>
+public class ParticleControlTests
+{
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task VanillaFirepitParticlesArePhotographable()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        World.SetBlock("game:firepit-lit", P(8, 1, 10));
+        await Ticks(10);
+
+        var block = World.GetBlock(P(8, 1, 10));
+        Log($"firepit-lit particle groups: {block.ParticleProperties?.Length ?? 0}, light={block.LightHsv[2]}");
+
+        await Player.Teleport(P(8, 1, 5));
+        await Ticks(10);
+        await Interact.LookAt(P(8, 1, 10));
+
+        // "Takes a few seconds for the game to register the block" - Block.OnAsyncClientParticleTick
+        await Ticks(200);
+        await Frames.Wait(120);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "control-firepit.png"));
+        Log("control screenshot: " + path);
+        Assert.NotNull(path);
+    }
+}

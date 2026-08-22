@@ -1,0 +1,11 @@
+bin/
+obj/
+Releases/
+.idea/
+*.DotSettings.user
+.DS_Store
+.showcase-run/
+
+# Screenshots are generated, not authored - see docs/screenshots/README.md.
+# Keeping ~8 MB of PNG out of history; regenerate with shots/ModDbShots.cs.
+docs/screenshots/*.png

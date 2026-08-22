@@ -1,0 +1,6 @@
+{
+	"//": "GuiHandbookTextPage calls Lang.Get on these verbatim, so they must carry the domain - an unqualified key renders as the key itself.",
+	"pageCode": "gamemechanicinfo-fornax",
+	"title": "fornax:gamemechanicinfo-fornax-title",
+	"text": "fornax:gamemechanicinfo-fornax-text"
+}

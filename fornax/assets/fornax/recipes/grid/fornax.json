@@ -1,0 +1,63 @@
+[
+	{
+		"ingredientPattern": "MMM,B_B,BBB",
+		"ingredients": {
+			"M": {
+				"type": "block",
+				"code": "game:mudbrick-*"
+			},
+			"B": {
+				"type": "item",
+				"code": "game:burnedbrick-*"
+			}
+		},
+		"width": 3,
+		"height": 3,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilnfirebox-cold-north",
+			"quantity": 1
+		}
+	},
+	{
+		"ingredientPattern": "M_M,MMM",
+		"ingredients": {
+			"M": {
+				"type": "block",
+				"code": "game:mudbrick-*"
+			}
+		},
+		"width": 3,
+		"height": 2,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilnvent-idle",
+			"quantity": 1
+		}
+	},
+	{
+		"ingredientPattern": "CCC,C_L",
+		"ingredients": {
+			"C": {
+				"type": "item",
+				"code": "game:clay-*"
+			},
+			"L": {
+				"type": "block",
+				"code": "game:soil-*-none",
+				"name": "grade",
+				"allowedVariants": [
+					"low",
+					"medium"
+				]
+			}
+		},
+		"width": 3,
+		"height": 2,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilnseal-intact",
+			"quantity": 1
+		}
+	}
+]

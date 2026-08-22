@@ -1,0 +1,119 @@
+{
+	"code": "kilnseal",
+	"class": "Block",
+	"variantgroups": [
+		{
+			"code": "state",
+			"states": [
+				"intact",
+				"cracked"
+			]
+		}
+	],
+	"attributes": {
+		"handbook": {
+			"groupBy": [
+				"kilnseal-intact"
+			]
+		}
+	},
+	"shape": {
+		"base": "game:block/basic/cube"
+	},
+	"drawtype": "Cube",
+	"blockmaterial": "Soil",
+	"creativeinventoryByType": {
+		"*-intact": {
+			"general": [
+				"*"
+			],
+			"construction": [
+				"*"
+			]
+		},
+		"*": {}
+	},
+	"replaceable": 500,
+	"resistanceByType": {
+		"*-intact": 1.2,
+		"*-cracked": 0.2
+	},
+	"lightAbsorption": 99,
+	"texturesByType": {
+		"*-intact": {
+			"all": {
+				"base": "game:block/clay/daub/brown/normal1",
+				"alternates": [
+					{
+						"base": "game:block/clay/daub/brown/normal2"
+					},
+					{
+						"base": "game:block/clay/daub/brown/normal3"
+					}
+				]
+			}
+		},
+		"*-cracked": {
+			"all": {
+				"base": "game:block/clay/daub/brown/cracked1",
+				"alternates": [
+					{
+						"base": "game:block/clay/daub/brown/cracked2"
+					},
+					{
+						"base": "game:block/clay/daub/brown/cracked3"
+					}
+				]
+			}
+		}
+	},
+	"dropsByType": {
+		"*-intact": [
+			{
+				"type": "block",
+				"code": "kilnseal-intact",
+				"quantity": {
+					"avg": 1,
+					"var": 0
+				}
+			}
+		],
+		"*-cracked": []
+	},
+	"sounds": {
+		"walk": "game:walk/stone",
+		"place": "game:block/dirt",
+		"break": "game:block/dirt",
+		"hit": "game:block/dirt"
+	},
+	"heldTpIdleAnimation": "holdbothhandslarge",
+	"heldRightReadyAnimation": "heldblockready",
+	"heldTpUseAnimation": "twohandplaceblock",
+	"tpHandTransform": {
+		"translation": {
+			"x": -1.23,
+			"y": -0.91,
+			"z": -0.8
+		},
+		"rotation": {
+			"x": -2,
+			"y": 25,
+			"z": -78
+		},
+		"scale": 0.4
+	},
+	"materialDensity": 1600,
+	"guiTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0.5,
+			"z": 0.5
+		},
+		"rotation": {
+			"x": -22.6,
+			"y": -45.3,
+			"z": 0
+		},
+		"scale": 1.0
+	}
+}

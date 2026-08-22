@@ -1,0 +1,121 @@
+{
+	"code": "kilngrateraw",
+	"maxstacksize": 16,
+	"behaviors": [
+		{
+			"name": "GroundStorable",
+			"properties": {
+				"layout": "Stacking",
+				"placeRemoveSound": "game:sounds/block/dirt1",
+				"stackingModel": "fornax:block/gratepile",
+				"upSolid": true,
+				"stackingCapacity": 8,
+				"transferQuantity": 1,
+				"bulkTransferQuantity": 4,
+				"collisionBox": {
+					"x1": 0,
+					"y1": 0,
+					"z1": 0,
+					"x2": 1,
+					"y2": 0.25,
+					"z2": 1
+				},
+				"cbScaleYByLayer": 0.125,
+				"maxFireable": 8,
+				"cuboidsPerModel": 6,
+				"itemsPerModel": 1
+			}
+		}
+	],
+	"//": "Same shape as the fired tile - the raw one is that tile, just unfired.",
+	"shape": {
+		"base": "game:block/clay/grating"
+	},
+	"textures": {
+		"front1": {
+			"base": "game:block/clay/blueclay"
+		},
+		"material": {
+			"base": "game:block/clay/blueclay"
+		}
+	},
+	"attributes": {
+		"tempGlowMode": 1,
+		"displaycaseable": true,
+		"shelvable": true,
+		"handbook": {
+			"groupBy": [
+				"kilngrateraw"
+			]
+		}
+	},
+	"creativeinventory": {
+		"general": [
+			"*"
+		],
+		"items": [
+			"*"
+		]
+	},
+	"combustibleProps": {
+		"meltingPoint": 650,
+		"meltingDuration": 30,
+		"smeltedRatio": 1,
+		"smeltingType": "fire",
+		"requiresContainer": false,
+		"smeltedStack": {
+			"type": "block",
+			"code": "fornax:kilngrate"
+		}
+	},
+	"materialDensity": 2600,
+	"guiTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0.75,
+			"z": 0.5
+		},
+		"rotation": {
+			"x": -22.6,
+			"y": -45.3,
+			"z": 0
+		},
+		"scale": 1.15
+	},
+	"tpHandTransform": {
+		"translation": {
+			"x": -0.9,
+			"y": -0.6,
+			"z": -0.6
+		},
+		"rotation": {
+			"x": 0,
+			"y": 24,
+			"z": -8
+		},
+		"origin": {
+			"x": 0.5,
+			"y": 0.5,
+			"z": 0.5
+		},
+		"scale": 0.55
+	},
+	"groundTransform": {
+		"translation": {
+			"x": 0,
+			"y": 0,
+			"z": 0
+		},
+		"rotation": {
+			"x": 0,
+			"y": -45,
+			"z": 0
+		},
+		"origin": {
+			"x": 0.5,
+			"y": 0.5,
+			"z": 0.5
+		},
+		"scale": 1.5
+	}
+}
