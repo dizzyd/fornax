@@ -1113,7 +1113,9 @@ public class FornaxTests
     }
 
 
+    /// <summary>Needs a client: the ignite probe is driven through the player's own entity.</summary>
     [VsTest(TimeoutMs = 120000)]
+    [RequiresClient]
     public async Task AnIncompleteKilnRefusesToLightAndSaysWhy()
     {
         BuildKiln(sealEntrance: false);        // entrance left open
