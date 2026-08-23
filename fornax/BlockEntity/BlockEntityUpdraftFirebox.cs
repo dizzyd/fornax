@@ -80,7 +80,6 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     {
         base.Initialize(api);
 
-        structure = Block?.Attributes?["multiblockStructure"]?.AsObject<MultiblockStructure>();
         InitOrientation();
 
         if (totalHoursLastUpdate <= 0) totalHoursLastUpdate = api.World.Calendar.TotalHours;
@@ -107,9 +106,31 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             _ => 0
         };
 
-        structure?.InitForUse(rotYDeg);
+        structure = ResolveStructure(rotYDeg);
 
         centerPos = Pos.AddCopy(Orientation.Normali.X * 2, 0, Orientation.Normali.Z * 2);
+    }
+
+    /// <summary>
+    /// The multiblock definition for one orientation, shared by every kiln that faces that way.
+    ///
+    /// It is 134 offsets of JSON and works out at 41 KB and 200 microseconds to deserialize -
+    /// paid once per firebox per chunk load if each block entity builds its own, which for a
+    /// player walking past a pottery yard is a steady drip of garbage for no reason. Nothing
+    /// mutates it after InitForUse, so one instance per rotation serves the lot. The cache
+    /// lives on the API object, so it is per side and goes when the world does.
+    /// </summary>
+    private MultiblockStructure ResolveStructure(int rotYDeg)
+    {
+        var attributes = Block?.Attributes?["multiblockStructure"];
+        if (attributes == null || !attributes.Exists) return null;
+
+        return ObjectCacheUtil.GetOrCreate(Api, $"fornax:multiblock-{Block.FirstCodePart()}-{rotYDeg}", () =>
+        {
+            var shared = attributes.AsObject<MultiblockStructure>();
+            shared.InitForUse(rotYDeg);
+            return shared;
+        });
     }
 
     // =====================================================================
@@ -775,6 +796,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         var missing = new List<BlockPos>();
         if (structure?.TransformedOffsets == null) return missing;
 
+        // InitForUse builds this same map, but keeps it private.
         var codeByNumber = new Dictionary<int, AssetLocation>();
         foreach (var pair in structure.BlockNumbers) codeByNumber[pair.Value] = pair.Key;
 
@@ -1027,6 +1049,22 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (Lit)
         {
             dsc.AppendLine(Lang.Get("fornax:lit", FiredEnergyHours, Cfg.FiringEnergyHours));
+        }
+        else if (FiredEnergyHours > 0)
+        {
+            // A firing that ran out of fuel looks exactly like one that was never lit, right
+            // down to the firebox going dark - and the hours banked in it are perishable.
+            dsc.AppendLine(Lang.Get("fornax:firing-paused", FiredEnergyHours, Cfg.FiringEnergyHours));
+        }
+        else if (missing == 0 && fuel > 0)
+        {
+            dsc.AppendLine(Lang.Get("fornax:not-lit"));
+        }
+
+        // Not just while lit: a kiln that has gone out is at its hottest in the minutes after,
+        // and that is exactly when someone comes to see what happened and breaks a seal.
+        if (ChamberTemperature > Cfg.AmbientTemperature)
+        {
             dsc.AppendLine(Lang.Get("fornax:chamber-temp", ChamberTemperature));
 
             if (ChamberTemperature >= Cfg.ShatterSafeTemperature)

@@ -740,6 +740,69 @@ public class FornaxTests
         Assert.Equal(afterCooling, be.FiredEnergyHours, "a kiln that is already cold cannot go cold again");
     }
 
+    /// <summary>
+    /// The draft vent is scenery with no block entity of its own, so only the firebox ever
+    /// changes it. Break a lit firebox and nothing was left to turn the plume off.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task BreakingALitFireboxStopsTheVentSmoking()
+    {
+        BuildKiln();
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        await Tick3s();
+
+        BlockPos vent = Center().AddCopy(0, 5, 0);
+        Assert.Equal("fornax:kilnvent-drafting", World.BlockCode(vent), "a lit kiln should be drafting");
+
+        World.SetBlock("game:air", Fb());
+        await Ticks(4);
+
+        Log($"firebox broken while lit: vent is {World.BlockCode(vent)}");
+        Assert.Equal(Vent, World.BlockCode(vent), "a dismantled kiln should not keep smoking");
+    }
+
+    /// <summary>
+    /// The multiblock definition is shared between kilns rather than deserialized per block
+    /// entity, cached per rotation. A mistake in that key would have every kiln checking one
+    /// orientation's layout, so each facing has to still lay its structure out its own way.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task EachFacingLaysItsStructureOutItsOwnWay()
+    {
+        // "side" is the face shown to the player, so the body runs the opposite way
+        var expect = new (string side, int dx, int dz)[]
+        {
+            ("south", 0, -2), ("north", 0, 2), ("east", -2, 0), ("west", 2, 0)
+        };
+
+        BlockPos at = P(8, 1, 10);
+
+        foreach (var c in expect)
+        {
+            World.SetBlock("game:air", at);
+            await Ticks(1);
+            World.SetBlock($"fornax:kilnfirebox-cold-{c.side}", at);
+            await Ticks(2);
+
+            var missing = World.BE<BlockEntityUpdraftFirebox>(at).MissingStructurePositions();
+            double cx = missing.Average(p => p.X - at.X);
+            double cz = missing.Average(p => p.Z - at.Z);
+
+            Log($"{c.side}: {missing.Count} positions, centred on ({cx:0.##}, {cz:0.##})");
+            Assert.Equal(c.dx, (int)Math.Round(cx), $"a {c.side}-facing kiln should run its body along x");
+            Assert.Equal(c.dz, (int)Math.Round(cz), $"a {c.side}-facing kiln should run its body along z");
+        }
+
+        var cached = Sapi.ObjectCache.Keys.Where(k => k.StartsWith("fornax:multiblock-")).ToList();
+        Log("shared structures: " + string.Join(", ", cached));
+        Assert.Equal(4, cached.Count, "one shared definition per rotation, not one per firebox");
+    }
+
     [VsTest(TimeoutMs = 180000)]
     public async Task HotterFuelFiresTheSameBatchFaster()
     {
