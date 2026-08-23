@@ -53,6 +53,12 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     public bool Lit;
     public bool StructureComplete;
 
+    /// <summary>
+    /// A batch has finished and is still sitting on the grate waiting to be taken out. Set the
+    /// moment the firing ends, and cleared when the kiln is sealed up again for the next one.
+    /// </summary>
+    public bool BatchFired;
+
     /// <summary>Fuel energy already burned towards <see cref="FornaxConfig.FiringEnergyHours"/>.</summary>
     public double FiredEnergyHours;
 
@@ -132,6 +138,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         StructureComplete = structure.InCompleteBlockCount(Api.World, Pos) == 0;
 
         bool dirty = wasComplete != StructureComplete;
+
+        // Sealed up again: the batch has been dealt with, whatever the player did with it.
+        if (StructureComplete && BatchFired)
+        {
+            BatchFired = false;
+            dirty = true;
+        }
 
         if (!Lit)
         {
@@ -394,7 +407,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return props.SmeltedStack?.ResolvedItemstack?.Block?.BlockMaterial == EnumBlockMaterial.Ceramic;
     }
 
-    private void WalkWares(Action<BlockEntityGroundStorage, ItemSlot> onWare)
+    /// <summary>Every occupied ground storage slot on the grate, fireable or not.</summary>
+    private void WalkGrate(Action<BlockEntityGroundStorage, ItemSlot> onSlot)
     {
         if (centerPos == null) return;
 
@@ -411,18 +425,44 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                 for (int i = 0; i < storage.Inventory.Count; i++)
                 {
                     var slot = storage.Inventory[i];
-                    if (slot.Empty || !IsFireable(slot.Itemstack)) continue;
+                    if (slot.Empty) continue;
 
-                    onWare(storage, slot);
+                    onSlot(storage, slot);
                 }
             }
         }
+    }
+
+    /// <summary>The green wares: the ones a firing still has work to do on.</summary>
+    private void WalkWares(Action<BlockEntityGroundStorage, ItemSlot> onWare)
+    {
+        WalkGrate((storage, slot) =>
+        {
+            if (IsFireable(slot.Itemstack)) onWare(storage, slot);
+        });
     }
 
     public int CountWares()
     {
         int total = 0;
         WalkWares((_, slot) => total += slot.Itemstack.StackSize);
+        return total;
+    }
+
+    /// <summary>
+    /// What is on the grate that a firing has nothing left to do with - which, on a kiln that
+    /// has just finished one, is the batch itself. Fired pottery has no combustible properties
+    /// any more, so it stops being counted as wares at the exact moment the player most wants
+    /// to be told it is there.
+    /// </summary>
+    public int CountFinishedWares()
+    {
+        int total = 0;
+        WalkGrate((_, slot) =>
+        {
+            if (!IsFireable(slot.Itemstack)) total += slot.Itemstack.StackSize;
+        });
+
         return total;
     }
 
@@ -459,6 +499,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         Lit = false;
         FiredEnergyHours = 0;
         burnCredit = 0;
+        BatchFired = true;
         ApplyLitAppearance();
 
         CrackSeals();
@@ -733,6 +774,26 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     }
 
     /// <summary>
+    /// How many structure positions are wrong, and how many of those are cracked mud seals.
+    /// Every firing cracks the six seals across the loading entrance, so on a kiln that has
+    /// just finished a batch those are the whole of what is "wrong" with it - which is worth
+    /// telling apart from a kiln somebody has knocked a hole in.
+    /// </summary>
+    public int CountMissing(out int crackedSeals)
+    {
+        crackedSeals = 0;
+
+        var missing = MissingStructurePositions();
+        foreach (var at in missing)
+        {
+            var have = Api.World.BlockAccessor.GetBlock(at);
+            if (have.Code?.Domain == "fornax" && have.Code.Path == "kilnseal-cracked") crackedSeals++;
+        }
+
+        return missing.Count;
+    }
+
+    /// <summary>
     /// A concrete block to draw for a wildcard requirement. The patterns accept several blocks
     /// - any mud brick, cob, any firebox facing - so the guide has to pick one to show, and it
     /// should be one that actually exists rather than the pattern itself.
@@ -815,11 +876,17 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     {
         if (Api is not ICoreClientAPI capi || structure == null) return;
 
-        int missing = structure.InCompleteBlockCount(Api.World, Pos);
+        int missing = CountMissing(out int crackedSeals);
 
         if (missing > 0)
         {
-            capi.TriggerIngameError(this, "incomplete", Lang.Get("fornax:structure-incomplete", missing));
+            // Nothing wrong but the seals the firing cracked: that is a finished kiln, not a
+            // broken one. Still highlight them, since they are what has to be broken to unload.
+            capi.TriggerIngameError(this, BatchFired && missing == crackedSeals ? "done" : "incomplete",
+                BatchFired && missing == crackedSeals
+                    ? Lang.Get("fornax:firing-done")
+                    : Lang.Get("fornax:structure-incomplete", missing));
+
             structure.HighlightIncompleteParts(Api.World, byPlayer, Pos);
             highlighting = true;
             return;
@@ -866,6 +933,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         Lit = tree.GetBool("lit");
         StructureComplete = tree.GetBool("structureComplete");
+        BatchFired = tree.GetBool("batchFired");
         FiredEnergyHours = tree.GetDouble("firedEnergyHours");
         burnCredit = tree.GetDouble("burnCredit");
         ChamberTemperature = tree.GetFloat("chamberTemperature");
@@ -878,6 +946,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         tree.SetBool("lit", Lit);
         tree.SetBool("structureComplete", StructureComplete);
+        tree.SetBool("batchFired", BatchFired);
         tree.SetDouble("firedEnergyHours", FiredEnergyHours);
         tree.SetDouble("burnCredit", burnCredit);
         tree.SetFloat("chamberTemperature", ChamberTemperature);
@@ -888,8 +957,17 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     {
         if (structure == null) return;
 
-        int missing = structure.InCompleteBlockCount(Api.World, Pos);
-        if (missing > 0)
+        int missing = CountMissing(out int crackedSeals);
+
+        // A finished batch cracks every seal, so the kiln calls itself broken at the exact
+        // moment it has done its job. Lead with what actually happened, and only add the raw
+        // count when something other than the seals is wrong with it too.
+        if (BatchFired)
+        {
+            dsc.AppendLine(Lang.Get("fornax:firing-done"));
+            if (missing > crackedSeals) dsc.AppendLine(Lang.Get("fornax:structure-incomplete", missing));
+        }
+        else if (missing > 0)
         {
             dsc.AppendLine(Lang.Get("fornax:structure-incomplete", missing));
         }
@@ -899,19 +977,23 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         }
 
         int wares = CountWares();
-        dsc.AppendLine(wares > 0
-            ? Lang.Get("fornax:wares-loaded", wares)
-            : Lang.Get("fornax:no-wares"));
+        int finished = BatchFired ? CountFinishedWares() : 0;
+
+        if (wares > 0) dsc.AppendLine(Lang.Get("fornax:wares-loaded", wares));
+        if (finished > 0) dsc.AppendLine(Lang.Get("fornax:fired-wares", finished));
+        if (wares == 0 && finished == 0) dsc.AppendLine(Lang.Get("fornax:no-wares"));
 
         int fuel = FuelItemCount();
         if (fuel > 0)
         {
             dsc.AppendLine(Lang.Get("fornax:fuel-remaining", fuel, EstimatedBurnHours()));
 
-            // Only worth saying something when the fuel loaded will not see the batch out.
+            // Only worth saying something when the fuel loaded will not see the batch out -
+            // and not at all on a kiln still holding a finished one, where a shortfall for the
+            // next firing reads as something having gone wrong with the last.
             double needed = Math.Max(0, Cfg.FiringEnergyHours - FiredEnergyHours);
             double have = FuelEnergyRemaining();
-            if (have < needed)
+            if (have < needed && !BatchFired)
             {
                 dsc.AppendLine(Lang.Get("fornax:fuel-short", (int)Math.Round(100 * have / Math.Max(0.001, needed))));
             }

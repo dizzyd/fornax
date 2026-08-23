@@ -514,6 +514,62 @@ public class FornaxTests
         Assert.Equal(Cracked, World.BlockCode(Fb().AddCopy(0, 2, 0)));
     }
 
+    /// <summary>
+    /// The firing cracks all six seals, so a kiln that has just done its job fails its own
+    /// structure check. It must not report that as damage: what it says is that the batch is
+    /// done, and the fired wares stay counted even though they are no longer fireable.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task AFinishedKilnSaysItIsDoneRatherThanBroken()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        for (int i = 0; i < 8 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        Assert.True(!be.Lit, "the firing should have finished");
+        Assert.True(be.BatchFired, "a finished batch should be flagged as waiting");
+
+        int missing = be.CountMissing(out int cracked);
+        Log($"after firing: {missing} wrong, {cracked} of them cracked seals");
+        Assert.Equal(6, cracked, "every seal across the entrance should have cracked");
+        Assert.Equal(missing, cracked, "nothing but the seals should be wrong with a fired kiln");
+
+        Assert.Equal(0, be.CountWares(), "fired bricks are no longer green wares");
+        Assert.Equal(8, be.CountFinishedWares(), "but they are still sitting on the grate");
+
+        var dsc = new System.Text.StringBuilder();
+        be.GetBlockInfo(null, dsc);
+        string info = dsc.ToString();
+        Log("block info:\n" + info.TrimEnd());
+
+        Assert.True(info.Contains(Lang.Get("fornax:firing-done")), "it should say the firing is done");
+        Assert.True(!info.Contains(Lang.Get("fornax:structure-incomplete", missing)),
+            "and must not report the cracked seals as a broken structure");
+        Assert.True(!info.Contains(Lang.Get("fornax:fuel-short", 50)),
+            "nor nag about fuel for the next batch while this one is still in there");
+
+        // Re-sealing starts the next cycle, and the kiln goes back to its ordinary reporting.
+        for (int y = 2; y <= 3; y++)
+        {
+            for (int dx = -1; dx <= 1; dx++) World.SetBlock(Seal, Fb().AddCopy(dx, y, 0));
+        }
+
+        await Tick3s();
+
+        Assert.True(be.StructureComplete);
+        Assert.True(!be.BatchFired, "a re-sealed kiln is ready for the next batch, not holding the last one");
+    }
+
     [VsTest(TimeoutMs = 180000)]
     public async Task HotterFuelFiresTheSameBatchFaster()
     {
@@ -678,6 +734,61 @@ public class FornaxTests
 
         Log($"lit={be.Lit} after {attempts} firestarter attempt(s)");
         Assert.True(be.Lit, "holding a firestarter on the firebox should light the kiln");
+    }
+
+    /// <summary>
+    /// The "your batch is done" line is only worth anything if it reaches the copy of the block
+    /// entity the player is actually looking at. The client keeps its own, fed from the server's
+    /// tree attributes, so a flag that never gets synced would leave the client still reporting
+    /// the cracked seals as a broken kiln.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task TheClientIsToldTheBatchIsDone()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        Fuel("game:firewood", 16);
+        await Player.StandNear(Fb().AddCopy(0, 0, 3));
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        for (int i = 0; i < 8 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        Assert.True(be.BatchFired, "the server should be holding a finished batch");
+
+        // The tree attributes go out on the next server tick and the client applies them when
+        // the packet lands, so this is a wait, not a single reading.
+        bool clientFired = false;
+        bool haveBe = false;
+        string info = "";
+
+        for (int i = 0; i < 10 && !clientFired; i++)
+        {
+            await Ticks(2);
+
+            await OnClient();
+            var cbe = Vs.Capi.World.BlockAccessor.GetBlockEntity(Fb()) as BlockEntityUpdraftFirebox;
+            var dsc = new System.Text.StringBuilder();
+            cbe?.GetBlockInfo(Vs.Capi.World.Player, dsc);
+
+            haveBe = cbe != null;
+            clientFired = cbe?.BatchFired ?? false;
+            info = dsc.ToString();
+            await OnServer();
+        }
+
+        Log("client block info:\n" + info.TrimEnd());
+        Assert.True(haveBe, "the client should have a block entity for the firebox");
+        Assert.True(clientFired, "the client's block entity should know the batch is finished");
+        Assert.True(info.Contains(Lang.Get("fornax:firing-done")),
+            "and should say so where the player will read it");
     }
 
     /// <summary>
