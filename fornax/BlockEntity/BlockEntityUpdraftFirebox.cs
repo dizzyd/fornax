@@ -289,12 +289,33 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return Math.Abs(ChamberTemperature - before) > 0.01f;
     }
 
+    /// <summary>
+    /// Cools the chamber towards ambient, and charges for letting a firing go out.
+    ///
+    /// The banked hours are hours of heat already in the ware, not credit in a ledger. Most of
+    /// what a firing costs is the climb to temperature, and a kiln that has gone stone cold has
+    /// to make that climb over again - so reaching ambient with a batch unfinished forfeits
+    /// <see cref="FornaxConfig.ColdRestartPenaltyHours"/> of it. Relighting while the chamber
+    /// still holds heat costs nothing at all, which is the whole distinction: a pause is free,
+    /// walking away is not.
+    ///
+    /// Charged on the tick that reaches ambient and no other, since every later call to this
+    /// leaves at the guard above.
+    /// </summary>
     private bool CoolChamber(double hoursPassed)
     {
         if (ChamberTemperature <= Cfg.AmbientTemperature) return false;
 
         float before = ChamberTemperature;
         ChamberTemperature = Math.Max(Cfg.AmbientTemperature, ChamberTemperature - (float)(hoursPassed * Cfg.ChamberCoolingPerHour));
+
+        if (ChamberTemperature <= Cfg.AmbientTemperature && FiredEnergyHours > 0)
+        {
+            double lost = Math.Min(FiredEnergyHours, Math.Max(0, Cfg.ColdRestartPenaltyHours));
+            FiredEnergyHours -= lost;
+            Api.World.Logger.VerboseDebug("[fornax] kiln at {0} went cold, forfeiting {1:0.#} of its firing", Pos, lost);
+        }
+
         return Math.Abs(ChamberTemperature - before) > 0.01f;
     }
 
@@ -1013,16 +1034,19 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                 dsc.AppendLine(Lang.Get("fornax:chamber-hot-warning"));
             }
         }
-        else if (missing == 0 && fuel > 0)
-        {
-            dsc.AppendLine(Lang.Get("fornax:not-lit"));
-        }
     }
 
     public override void OnBlockRemoved()
     {
         base.OnBlockRemoved();
         ClearHighlights();
+
+        // The draft vent is scenery - it has no block entity and nothing else ever changes it
+        // back. A firebox broken while lit would leave a dismantled kiln smoking for good.
+        if (Api?.Side == EnumAppSide.Server && centerPos != null)
+        {
+            SwapVariant(centerPos.UpCopy(VentLevel), "state", "idle", exchange: false);
+        }
     }
 
     public override void OnBlockUnloaded()

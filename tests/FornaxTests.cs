@@ -103,6 +103,8 @@ public class FornaxTests
 
     private static BlockEntityUpdraftFirebox Be() => World.BE<BlockEntityUpdraftFirebox>(Fb());
 
+    private static FornaxConfig Cfg => FornaxModSystem.Config;
+
     private static void LoadWare(int dx, int dz, string code, int count)
     {
         BlockPos pos = Ware(dx, dz);
@@ -427,10 +429,6 @@ public class FornaxTests
         await Ticks(1);
     }
 
-    // ------------------------------------------------------------------
-    //  Multiblock validation
-    // ------------------------------------------------------------------
-
     [VsTest(TimeoutMs = 120000)]
     public async Task CompleteStructureValidates()
     {
@@ -639,6 +637,107 @@ public class FornaxTests
 
         Assert.True(be.StructureComplete);
         Assert.True(!be.BatchFired, "a re-sealed kiln is ready for the next batch, not holding the last one");
+    }
+
+    /// <summary>
+    /// Running dry part way through must not throw the batch away. The kiln goes out, keeps the
+    /// hours of heat it has already put in, and leaves the shell sealed and the wares green, so
+    /// topping the firebox up and lighting it again finishes the same batch.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task RunningOutOfFuelPausesTheFiringRatherThanLosingIt()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        Fuel("game:firewood", 4);          // ~5h of burn against a 20 fuel-hour batch
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+
+        for (int i = 0; i < 10 && be.Lit; i++)
+        {
+            await Hours(2);
+            await Tick3s();
+        }
+
+        Log($"out of fuel at {be.FiredEnergyHours:0.#}/20 hours, chamber {be.ChamberTemperature:0}C");
+
+        Assert.True(!be.Lit, "an empty firebox should put the kiln out");
+        Assert.Greater(be.FiredEnergyHours, 0.0);
+        Assert.Less(be.FiredEnergyHours, 20.0);
+        Assert.True(be.StructureComplete, "the shell should still be sealed");
+        Assert.True(!be.BatchFired, "an unfinished batch is not a finished one");
+        Assert.Equal(Seal, World.BlockCode(Fb().AddCopy(0, 2, 0)), "the seals only crack on a completed firing");
+
+        var gs = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        Assert.Equal("game:rawbrick-blue", gs.Inventory[0].Itemstack.Collectible.Code.ToString());
+
+        // still warm, so nothing has been forfeited yet: top it up and the batch carries on
+        Assert.Greater(be.ChamberTemperature, (float)Cfg.AmbientTemperature);
+
+        double banked = be.FiredEnergyHours;
+        Fuel("game:firewood", 16);
+        await Tick3s();
+
+        Assert.True(be.CanIgnite, "a re-fuelled kiln should light without breaking the seals");
+        Assert.Equal(banked, be.FiredEnergyHours, "refuelling must not reset the progress");
+
+        be.TryIgnite(null);
+        for (int i = 0; i < 10 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        Assert.True(be.BatchFired, "the resumed firing should finish the batch");
+        Assert.Equal("game:burnedbrick-gray", gs.Inventory[0].Itemstack.Collectible.Code.ToString());
+    }
+
+    /// <summary>
+    /// Leaving it, though, does cost. The climb to temperature is most of what a firing is, and
+    /// a kiln that has gone stone cold has to make it again.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task LettingTheChamberGoColdForfeitsProgress()
+    {
+        BuildKiln();
+        Fuel("game:firewood", 4);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+
+        for (int i = 0; i < 10 && be.Lit; i++)
+        {
+            await Hours(2);
+            await Tick3s();
+        }
+
+        double banked = be.FiredEnergyHours;
+        Assert.Greater(banked, 0.0);
+        Assert.Greater(be.ChamberTemperature, (float)Cfg.AmbientTemperature);
+
+        // let it stand until the chamber is stone cold
+        for (int i = 0; i < 10 && be.ChamberTemperature > Cfg.AmbientTemperature; i++)
+        {
+            await Hours(2);
+            await Tick3s();
+        }
+
+        Log($"banked {banked:0.#}h, chamber now {be.ChamberTemperature:0}C, left with {be.FiredEnergyHours:0.#}h");
+
+        Assert.Equal((float)Cfg.AmbientTemperature, be.ChamberTemperature, "the chamber should be back to ambient");
+        Assert.Equal(Math.Max(0, banked - Cfg.ColdRestartPenaltyHours), be.FiredEnergyHours,
+            "going cold should cost exactly the restart penalty");
+
+        // and it is charged once, not on every tick from here on
+        double afterCooling = be.FiredEnergyHours;
+        await Hours(6);
+        await Tick3s();
+        Assert.Equal(afterCooling, be.FiredEnergyHours, "a kiln that is already cold cannot go cold again");
     }
 
     [VsTest(TimeoutMs = 180000)]

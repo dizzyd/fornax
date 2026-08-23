@@ -52,6 +52,16 @@ public class FornaxConfig
     public int ChamberCoolingPerHour = 300;
     public int AmbientTemperature = 20;
 
+    /// <summary>
+    /// Fuel-hours forfeited when a firing is left unfinished and the chamber falls all the way
+    /// back to ambient. Most of what a real firing costs is the climb to temperature, and a kiln
+    /// that has gone stone cold has to make that climb again: at the default heating rate,
+    /// ambient to firing heat is about two in-game hours of burn, which is a quarter of the
+    /// eight hours a full batch takes. Progress cannot go below zero, so a firing that had
+    /// barely started simply starts again.
+    /// </summary>
+    public double ColdRestartPenaltyHours = 5.0;
+
     /// <summary>Below this chamber temperature, breaching the kiln costs nothing at all.</summary>
     public int ShatterSafeTemperature = 450;
 
