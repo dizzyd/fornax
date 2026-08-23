@@ -47,7 +47,6 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
     private MultiblockStructure structure;
     private BlockPos centerPos;
-    private bool highlighting;
 
     // --- persisted state -------------------------------------------------
     public bool Lit;
@@ -636,8 +635,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             var player = (byEntity as EntityPlayer)?.Player;
             if (player != null && structure != null)
             {
+                TakeGuide();
                 structure.HighlightIncompleteParts(Api.World, player, Pos);
-                highlighting = true;
             }
 
             return;
@@ -878,16 +877,34 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return ColorUtil.ColorFromRgba(200, 200, 200, 45);
     }
 
+    /// <summary>Whether this kiln is the one whose guide is currently up. See <see cref="FornaxModSystem.GuideOwner"/>.</summary>
+    private bool OwnsGuide => Api is ICoreClientAPI && Pos.Equals(FornaxModSystem.GuideOwner);
+
+    /// <summary>
+    /// Claims the session's one build guide for this kiln. Whatever another kiln had up goes:
+    /// the ghosts explicitly, and the highlights by being overwritten in the shared slot.
+    /// </summary>
+    private void TakeGuide()
+    {
+        FornaxModSystem.GhostRenderer?.Clear();
+        FornaxModSystem.GuideOwner = Pos.Copy();
+    }
+
+    private void ReleaseGuide(IPlayer byPlayer)
+    {
+        structure?.ClearHighlights(Api.World, byPlayer);
+        FornaxModSystem.GhostRenderer?.Clear();
+        FornaxModSystem.GuideOwner = null;
+    }
+
     /// <summary>Ctrl + right-click puts a ghost of the whole kiln up, and takes it down again.</summary>
     public void ToggleBuildGuide(IPlayer byPlayer)
     {
         if (Api is not ICoreClientAPI capi) return;
 
-        if (highlighting)
+        if (OwnsGuide)
         {
-            structure?.ClearHighlights(Api.World, byPlayer);
-            FornaxModSystem.GhostRenderer?.Clear();
-            highlighting = false;
+            ReleaseGuide(byPlayer);
             return;
         }
 
@@ -901,12 +918,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             return;
         }
 
+        TakeGuide();
+
         // Two layers: the ghost blocks say WHICH block goes where, the tinted highlight makes
         // them easy to pick out at a glance and is the only thing that can flag an obstruction.
         FornaxModSystem.GhostRenderer?.ShowGhosts(Pos, missing, wanted);
         Api.World.HighlightBlocks(byPlayer, MultiblockStructure.HighlightSlotId, missing, colors);
 
-        highlighting = true;
         capi.TriggerIngameError(this, "guide", Lang.Get("fornax:guide-shown", missing.Count));
     }
 
@@ -930,16 +948,12 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                     ? Lang.Get("fornax:firing-done")
                     : Lang.Get("fornax:structure-incomplete", missing));
 
+            TakeGuide();
             structure.HighlightIncompleteParts(Api.World, byPlayer, Pos);
-            highlighting = true;
             return;
         }
 
-        if (highlighting)
-        {
-            structure.ClearHighlights(Api.World, byPlayer);
-            highlighting = false;
-        }
+        if (OwnsGuide) ReleaseGuide(byPlayer);
     }
 
     private void BurnNearbyEntities()
@@ -1093,13 +1107,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         ClearHighlights();
     }
 
+    /// <summary>
+    /// Takes the guide down when this kiln goes away - but only if it still has it. A kiln that
+    /// lost the guide to another one must leave well alone; clearing regardless is what used to
+    /// wipe the guide off the kiln the player had just walked over to.
+    /// </summary>
     private void ClearHighlights()
     {
-        if (highlighting && Api is ICoreClientAPI capi)
-        {
-            structure?.ClearHighlights(Api.World, capi.World.Player);
-            FornaxModSystem.GhostRenderer?.Clear();
-            highlighting = false;
-        }
+        if (OwnsGuide && Api is ICoreClientAPI capi) ReleaseGuide(capi.World.Player);
     }
 }

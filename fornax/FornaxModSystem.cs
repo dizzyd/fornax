@@ -9,6 +9,7 @@
 using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 
 namespace Fornax;
 
@@ -47,6 +48,20 @@ public class FornaxModSystem : ModSystem
     /// </summary>
     public static KilnGhostRenderer GhostRenderer { get; private set; }
 
+    /// <summary>
+    /// The kiln whose build guide is currently up, or null.
+    ///
+    /// Both halves of the guide are one per session - the ghost mesh above, and the engine's
+    /// highlight slot, which every MultiblockStructure in the game shares. So putting a guide up
+    /// on a second kiln takes it away from the first, and the first must know that: without this
+    /// it would go on believing it owned a guide it had lost, and clear the new one out from
+    /// under the player when its own chunk unloaded.
+    ///
+    /// Written only from the client-guarded guide paths, so the server side of a singleplayer
+    /// game never touches it.
+    /// </summary>
+    public static BlockPos GuideOwner { get; set; }
+
     public override void StartClientSide(ICoreClientAPI api)
     {
         base.StartClientSide(api);
@@ -57,6 +72,7 @@ public class FornaxModSystem : ModSystem
     {
         GhostRenderer?.Dispose();
         GhostRenderer = null;
+        GuideOwner = null;
         base.Dispose();
     }
 

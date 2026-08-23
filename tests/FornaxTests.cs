@@ -1025,6 +1025,62 @@ public class FornaxTests
     }
 
     /// <summary>
+    /// Both halves of the build guide - the ghost mesh and the engine's highlight slot - are one
+    /// per session, so a second kiln's guide necessarily replaces the first's. The first must
+    /// know it has lost it: it used to go on believing it owned a guide it no longer had, and
+    /// wipe the new one when its own chunk unloaded.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task OneKilnsBuildGuideDoesNotWipeAnothers()
+    {
+        BlockPos a = P(3, 1, 4);
+        BlockPos b = P(9, 1, 12);
+        World.SetBlock(Firebox, a);
+        World.SetBlock(Firebox, b);
+        await Ticks(6);
+
+        async Task<(BlockPos owner, bool ghosts)> Toggle(BlockPos at)
+        {
+            await OnClient();
+            var cbe = Vs.Capi.World.BlockAccessor.GetBlockEntity(at) as BlockEntityUpdraftFirebox;
+            cbe?.ToggleBuildGuide(Vs.Capi.World.Player);
+            var state = (FornaxModSystem.GuideOwner, FornaxModSystem.GhostRenderer?.HasGhosts ?? false);
+            await OnServer();
+            return state;
+        }
+
+        var up = await Toggle(a);
+        Log($"guide up on A: owner={up.owner} ghosts={up.ghosts}");
+        Assert.Equal(a, up.owner, "the kiln the guide was opened on should own it");
+        Assert.True(up.ghosts);
+
+        var moved = await Toggle(b);
+        Log($"guide up on B: owner={moved.owner} ghosts={moved.ghosts}");
+        Assert.Equal(b, moved.owner, "opening a second guide should hand ownership over");
+        Assert.True(moved.ghosts);
+
+        // A is dismantled while B still has the guide up: it must leave B's alone
+        World.SetBlock("game:air", a);
+        await Ticks(6);
+
+        await OnClient();
+        var ownerAfter = FornaxModSystem.GuideOwner;
+        bool ghostsAfter = FornaxModSystem.GhostRenderer?.HasGhosts ?? false;
+        await OnServer();
+
+        Log($"after breaking A: owner={ownerAfter} ghosts={ghostsAfter}");
+        Assert.Equal(b, ownerAfter, "breaking a kiln that lost the guide must not take B's");
+        Assert.True(ghostsAfter, "and must not clear B's ghosts");
+
+        // B closing its own guide still works
+        var down = await Toggle(b);
+        Log($"B toggled off: owner={down.owner} ghosts={down.ghosts}");
+        Assert.Null(down.owner);
+        Assert.True(!down.ghosts);
+    }
+
+    /// <summary>
     /// A lit torch is the reliable way in: BlockBehaviorCanIgnite wants a three second hold
     /// but rolls no dice, where the firestarter is 1.5s with a 25% chance. An UNLIT torch has
     /// no CanIgnite behaviour at all and does nothing, which is an easy thing to be caught by.
