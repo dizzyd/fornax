@@ -36,11 +36,14 @@
 		}
 	},
 	{
-		"ingredientPattern": "CCC,C_L",
+		"//": "Shapeless, so the quantity lives on the ingredient: a repeated letter would be four separate wildcard matches against one merged stack of clay, and only the first would find it.",
+		"ingredientPattern": "CL",
+		"shapeless": true,
 		"ingredients": {
 			"C": {
 				"type": "item",
-				"code": "game:clay-*"
+				"code": "game:clay-*",
+				"quantity": 4
 			},
 			"L": {
 				"type": "block",
@@ -52,8 +55,8 @@
 				]
 			}
 		},
-		"width": 3,
-		"height": 2,
+		"width": 2,
+		"height": 1,
 		"output": {
 			"type": "block",
 			"code": "fornax:kilnseal-intact",

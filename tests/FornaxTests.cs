@@ -203,6 +203,77 @@ public class FornaxTests
         await Ticks(1);
     }
 
+    /// <summary>
+    /// A seal is a lump of daub, so where the clay and the dirt sit in the grid should not
+    /// matter.
+    ///
+    /// Shapeless matching merges identical supplied stacks before it matches, and then consumes
+    /// one supplied stack per ingredient - so the four clay have to be one ingredient of
+    /// quantity four. Written as the letter four times the recipe resolves, reads correctly and
+    /// matches nothing at all, in any arrangement. Measured: that form returns false both for
+    /// four separate clay and for a stack of four.
+    ///
+    /// Note the allowed soil grades make this two registered recipes, one per grade, which is
+    /// why crafting means "some seal recipe matches" rather than "the seal recipe matches".
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    [RequiresClient]
+    public async Task ASealCraftsFromAnyArrangement()
+    {
+        var recipes = Sapi.World.GridRecipes.FindAll(r =>
+            r.Output?.ResolvedItemStack?.Collectible?.Code?.Path == "kilnseal-intact");
+
+        Log($"{recipes.Count} seal recipes: " + string.Join(" ; ", recipes.Select(r =>
+            string.Join("+", r.ResolvedIngredients.Where(i => i != null).Select(i => $"{i.Code}x{i.Quantity}")))));
+
+        Assert.True(recipes.Count > 0, "no grid recipe produces a mud seal");
+        foreach (var r in recipes) Assert.True(r.Shapeless, "the seal recipe should be shapeless");
+
+        var player = Sapi.World.AllOnlinePlayers.FirstOrDefault();
+        Assert.NotNull(player);
+
+        var grid = new ItemSlot[9];
+        for (int i = 0; i < 9; i++) grid[i] = new DummySlot();
+
+        void Lay(string dirt, int clayCount, bool stacked)
+        {
+            for (int i = 0; i < 9; i++) grid[i].Itemstack = null;
+            if (dirt != null) grid[6].Itemstack = World.Stack(dirt);
+
+            if (stacked)
+            {
+                if (clayCount > 0) grid[2].Itemstack = World.Stack("game:clay-blue", clayCount);
+                return;
+            }
+
+            // scattered through the grid, in no order the pattern would recognise
+            int[] cells = { 8, 1, 4, 3 };
+            for (int i = 0; i < clayCount; i++) grid[cells[i]].Itemstack = World.Stack("game:clay-blue");
+        }
+
+        bool Crafts() => recipes.Exists(r => r.Matches(player, Sapi.World, grid, 3));
+
+        Lay("game:soil-medium-none", 4, stacked: false);
+        Assert.True(Crafts(), "four loose clay and a block of dirt should craft a seal wherever they sit");
+
+        Lay("game:soil-low-none", 4, stacked: false);
+        Assert.True(Crafts(), "and with either grade of dirt");
+
+        Lay("game:soil-low-none", 4, stacked: true);
+        Assert.True(Crafts(), "a single stack of four clay should work too");
+
+        Lay("game:soil-low-none", 3, stacked: false);
+        Assert.True(!Crafts(), "three clay is not enough");
+
+        Lay(null, 4, stacked: false);
+        Assert.True(!Crafts(), "and the dirt is not optional");
+
+        Lay("game:soil-high-none", 4, stacked: false);
+        Assert.True(!Crafts(), "high fertility soil is too good to daub with");
+
+        await Ticks(1);
+    }
+
     private static void AssertIngredients(GridRecipe recipe, string aPart, int aCount, string bPart, int bCount)
     {
         var counts = new Dictionary<string, int>();
