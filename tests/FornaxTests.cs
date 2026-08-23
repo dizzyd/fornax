@@ -1081,6 +1081,50 @@ public class FornaxTests
     }
 
     /// <summary>
+    /// Singleplayer runs a mod system per side out of one assembly and disposes both, so the
+    /// server side must keep its hands off the client's renderer. Calling its Dispose directly
+    /// is safe - ModSystem.Dispose is empty, and the mod's override touches nothing else.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    [RequiresClient]
+    public async Task DisposingTheServerSideLeavesTheRendererAlone()
+    {
+        BlockPos fb = P(6, 1, 8);
+        World.SetBlock(Firebox, fb);
+        await Ticks(6);
+
+        await OnClient();
+        var cbe = Vs.Capi.World.BlockAccessor.GetBlockEntity(fb) as BlockEntityUpdraftFirebox;
+        cbe?.ToggleBuildGuide(Vs.Capi.World.Player);
+        bool ghostsUp = FornaxModSystem.GhostRenderer?.HasGhosts ?? false;
+        var clientSystem = Vs.Capi.ModLoader.GetModSystem<FornaxModSystem>();
+        await OnServer();
+
+        Assert.True(ghostsUp, "the guide should be up before we start tearing things down");
+
+        var serverSystem = Sapi.ModLoader.GetModSystem<FornaxModSystem>();
+        Assert.True(!ReferenceEquals(serverSystem, clientSystem), "each side should have its own instance");
+
+        serverSystem.Dispose();
+
+        await OnClient();
+        bool alive = FornaxModSystem.GhostRenderer != null;
+        bool stillDrawn = FornaxModSystem.GhostRenderer?.HasGhosts ?? false;
+        var owner = FornaxModSystem.GuideOwner;
+        await OnServer();
+
+        Log($"after the server side disposed: renderer={alive} ghosts={stillDrawn} owner={owner}");
+        Assert.True(alive, "the server side must not throw away the client's renderer");
+        Assert.True(stillDrawn, "nor the guide the player is looking at");
+        Assert.Equal(fb, owner);
+
+        // put it back the way the test found it
+        await OnClient();
+        cbe?.ToggleBuildGuide(Vs.Capi.World.Player);
+        await OnServer();
+    }
+
+    /// <summary>
     /// A lit torch is the reliable way in: BlockBehaviorCanIgnite wants a three second hold
     /// but rolls no dice, where the firestarter is 1.5s with a 25% chance. An UNLIT torch has
     /// no CanIgnite behaviour at all and does nothing, which is an easy thing to be caught by.

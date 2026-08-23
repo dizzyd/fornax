@@ -62,17 +62,36 @@ public class FornaxModSystem : ModSystem
     /// </summary>
     public static BlockPos GuideOwner { get; set; }
 
+    /// <summary>Set only on the instance that runs the client, which is what makes this the renderer's owner.</summary>
+    private ICoreClientAPI capi;
+
     public override void StartClientSide(ICoreClientAPI api)
     {
         base.StartClientSide(api);
+
+        capi = api;
         GhostRenderer = new KilnGhostRenderer(api);
     }
 
+    /// <summary>
+    /// Tears down the renderer, but only from the instance that built it.
+    ///
+    /// A singleplayer game runs a mod system per side out of one assembly, and disposes both.
+    /// The renderer and the guide are client things held in statics, so an unguarded Dispose let
+    /// whichever side went first take down the other side's renderer. At shutdown that is
+    /// invisible, which is exactly what makes it worth closing: the day something disposes a
+    /// side on its own - a reload, a disconnect from an integrated server - it would not be.
+    /// </summary>
     public override void Dispose()
     {
-        GhostRenderer?.Dispose();
-        GhostRenderer = null;
-        GuideOwner = null;
+        if (capi != null)
+        {
+            GhostRenderer?.Dispose();
+            GhostRenderer = null;
+            GuideOwner = null;
+            capi = null;
+        }
+
         base.Dispose();
     }
 
