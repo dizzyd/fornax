@@ -409,6 +409,63 @@ public class FornaxTests
         Assert.True(!Be().StructureComplete, "an open loading entrance should invalidate the structure");
     }
 
+    /// <summary>
+    /// A kiln built on grass has soil under the combustion chamber, and soil grows tall grass
+    /// into the air above it. That used to invalidate a finished kiln all by itself, days after
+    /// it was built, with the culprit hidden under the grate.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task GrassGrowingInTheChamberDoesNotBreakTheStructure()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete);
+
+        // what BlockSoil.OnServerGameTick does to the cell above a grassy block
+        BlockPos weed = Center().AddCopy(1, 0, 0);
+        World.SetBlock("game:tallgrass-tall-free", weed);
+        await Tick3s();
+
+        Log($"chamber cell after a tick: {World.GetBlock(weed).Code}");
+        Assert.Equal(0, World.GetBlock(weed).Id, "the chamber cell should have been cleared back to air");
+        Assert.True(Be().StructureComplete, "grass in the chamber should be weeded, not fatal");
+    }
+
+    /// <summary>
+    /// Weeding keeps the kiln working; firing it is what settles the matter, by turning the
+    /// soil that does the growing into packed dirt that cannot.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task FiringBakesTheChamberFloorToPackedDirt()
+    {
+        BuildKiln();
+
+        // grassy soil under the chamber, and one cell a player deliberately floored with brick
+        BlockPos grassy = Center().AddCopy(1, -1, 0);
+        BlockPos laid = Center().AddCopy(-1, -1, 0);
+        World.SetBlock("game:soil-medium-normal", grassy);
+        World.SetBlock(Wall, laid);
+
+        Fuel("game:firewood", 16);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.True(be.StructureComplete);
+        Assert.Equal("game:soil-medium-normal", World.GetBlock(grassy).Code.ToString());
+
+        be.TryIgnite(null);
+        await Hours(4);
+        await Tick3s();
+        await Tick3s();   // the floor is tended at the top of the tick, on the heat it had then
+
+        Log($"at {be.ChamberTemperature:0}C the floor is {World.GetBlock(grassy).Code} / {World.GetBlock(laid).Code}");
+        Assert.Greater(be.ChamberTemperature, 450f);
+        Assert.Equal("game:packeddirt", World.GetBlock(grassy).Code.ToString(), "fired soil should bake");
+        Assert.Equal(Wall, World.GetBlock(laid).Code.ToString(), "a floor someone laid should be left alone");
+    }
+
     [VsTest(TimeoutMs = 120000)]
     public async Task CobIsAcceptedInPlaceOfMudBrick()
     {

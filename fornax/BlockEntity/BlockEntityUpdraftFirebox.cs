@@ -126,6 +126,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         double hoursPassed = Math.Max(0, now - totalHoursLastUpdate);
         totalHoursLastUpdate = now;
 
+        TendChamber();
+
         bool wasComplete = StructureComplete;
         StructureComplete = structure.InCompleteBlockCount(Api.World, Pos) == 0;
 
@@ -210,6 +212,59 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Keeps the combustion chamber empty, and eventually stops it filling itself back up.
+    ///
+    /// The chamber has to be air, and a kiln built on grass or dirt has soil sitting directly
+    /// under those cells. Soil sprouts tall grass into whatever air is above it - a lit firebox
+    /// even helps, since the light it throws is what soil looks for before it grows - so a kiln
+    /// that was complete yesterday quietly stops being complete, mid-firing, with the offending
+    /// block hidden under the grate where nobody would think to look.
+    ///
+    /// So two things happen here, before the structure is judged. Whatever the ground has grown
+    /// into the chamber is cleared, so it never counts against the check; and once the chamber
+    /// reaches firing heat the soil under it bakes to packed dirt, which is not soil and grows
+    /// nothing, so a kiln that has been fired once is done with this for good. Only plants and
+    /// soil are touched - a floor someone laid deliberately stays exactly as they laid it.
+    /// </summary>
+    private void TendChamber()
+    {
+        // The temperature the firebox starts looking like it is firing at, reused: if it looks
+        // like a kiln from outside, the ground inside has had a kiln's worth of heat on it.
+        bool baking = ChamberTemperature >= Cfg.FiringGlowTemperature;
+        Block packedDirt = baking ? Api.World.GetBlock(new AssetLocation("game", "packeddirt")) : null;
+
+        var pos = new BlockPos(Pos.dimension);
+
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dz == 0) continue;   // the mud brick pillar the grate rests on
+
+                pos.Set(centerPos.X + dx, centerPos.Y, centerPos.Z + dz);
+
+                var block = Api.World.BlockAccessor.GetBlock(pos);
+
+                // No drops: they would fall into a sealed chamber and burn there anyway.
+                if (block.Id != 0 && block.BlockMaterial == EnumBlockMaterial.Plant)
+                {
+                    Api.World.BlockAccessor.SetBlock(0, pos);
+                }
+
+                if (packedDirt == null) continue;
+
+                // BlockSoil is the class that does the growing, and the only one worth baking.
+                // Mud brick and cob are EnumBlockMaterial.Soil too, so material is no guide here.
+                pos.Down();
+                if (Api.World.BlockAccessor.GetBlock(pos) is BlockSoil)
+                {
+                    Api.World.BlockAccessor.SetBlock(packedDirt.Id, pos);
+                }
+            }
+        }
     }
 
     private bool HeatChamber(double hoursPassed, float target)
