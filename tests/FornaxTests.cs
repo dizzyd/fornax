@@ -800,6 +800,67 @@ public class FornaxTests
     }
 
     /// <summary>
+    /// A ware that wants more heat than the fuel will give is not fired, and the kiln says so
+    /// before it is lit rather than after a firing's worth of fuel has gone over it.
+    ///
+    /// No vanilla ware can trigger this - the hottest melts at 850 and the coolest legal fuel
+    /// still drives the chamber to 900 - which is the point: the gate is invisible until a mod
+    /// tags something that genuinely needs more heat. To exercise it without inventing a ware,
+    /// the draft bonus is turned down so that firewood alone is not enough for a raw brick.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AWareThatNeedsMoreHeatThanTheFuelGivesIsNotFired()
+    {
+        int draft = Cfg.DraftTemperatureBonus;
+
+        try
+        {
+            BuildKiln();
+            LoadWare(0, 0, "game:rawbrick-blue", 12);   // melts at 850
+            await Ticks(2);
+            await Tick3s();
+
+            // an unfuelled firebox judges the load against the best the kiln can do, so that a
+            // kiln you have not fuelled yet does not call its own load unfireable
+            Assert.Equal(0, Be().FuelItemCount());
+            Log($"no fuel -> wares={Be().CountWares()}, tooCold={Be().FirstTooColdOnGrate()?.Collectible?.Code}");
+            Assert.Equal(12, Be().CountWares(), "an empty firebox must not slander the load");
+            Assert.Null(Be().FirstTooColdOnGrate());
+
+            // firewood at 700 plus the usual 250 of draft is 950, comfortably over 850
+            Fuel("game:firewood", 32);
+            await Tick3s();
+            Log($"firewood, draft {draft} -> wares={Be().CountWares()}");
+            Assert.Equal(12, Be().CountWares(), "firewood should be hot enough for raw brick");
+            Assert.Null(Be().FirstTooColdOnGrate());
+
+            // take the draft away and 700 is not enough
+            Cfg.DraftTemperatureBonus = 0;
+            await Tick3s();
+
+            var tooCold = Be().FirstTooColdOnGrate();
+            Be().ChamberVersus(tooCold ?? World.Stack("game:rawbrick-blue", 1), out int reaches, out int needs);
+            Log($"firewood, draft 0 -> wares={Be().CountWares()}, reaches={reaches}, needs={needs}");
+
+            Assert.Equal(0, Be().CountWares(), "a chamber that cannot reach 850 fires no raw brick");
+            Assert.NotNull(tooCold, "and the kiln has to say so");
+            Assert.Equal(700, reaches);
+            Assert.Equal(850, needs);
+
+            var dsc = new System.Text.StringBuilder();
+            Be().GetBlockInfo(null, dsc);
+            string info = dsc.ToString();
+            Log("block info:\n" + info.TrimEnd());
+            Assert.True(info.Contains(Lang.Get("fornax:too-cold-to-fire", reaches, tooCold.GetName(), needs)),
+                "naming both temperatures, so the player knows what to burn instead");
+        }
+        finally
+        {
+            Cfg.DraftTemperatureBonus = draft;
+        }
+    }
+
+    /// <summary>
     /// The beehive kiln has no lime recipe of its own either, and its gate takes the same kind
     /// of attribute. Tagging is all it needs - no Harmony patch, and nothing taken away from
     /// vanilla, which is the difference between this and how BulkQuicklime does it.

@@ -19,6 +19,10 @@ namespace Fornax;
 /// charcoal 1300C/40) so that one full firing costs the same energy whatever you burn, and
 /// hotter fuel simply gets through that energy faster:
 ///
+/// Faster, and no further: fuel decides how hot the chamber gets, and a ware that melts above
+/// that is not fired. No vanilla ware can reach that - the hottest melts at 850 and the coolest
+/// fuel the firebox accepts still drives the chamber to 900 - but a mod can tag one that does.
+///
 ///     30 firewood   -> ~13 in-game hours
 ///     29 peat brick -> ~8 in-game hours
 ///     18 charcoal   -> ~6 in-game hours

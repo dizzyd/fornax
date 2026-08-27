@@ -609,13 +609,74 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     private bool IsOverfull(ItemStack stack) =>
         Cfg.RespectMaxFireable && stack.StackSize > MaxFireable(stack);
 
+    /// <summary>
+    /// The temperature the chamber will settle at with the fuel now in the firebox.
+    ///
+    /// An empty firebox is judged against the best this kiln can do rather than against nothing:
+    /// a kiln you have not fuelled yet has no business calling its load unfireable.
+    /// </summary>
+    private float TargetChamberTemperature()
+    {
+        SurveyFuel(out _, out int hottestFuel);
+        if (hottestFuel <= 0) return Cfg.ChamberMaxTemperature;
+
+        return Math.Min(hottestFuel + Cfg.DraftTemperatureBonus, Cfg.ChamberMaxTemperature);
+    }
+
+    private static int MeltingPointOf(ItemStack stack, IWorldAccessor world) =>
+        stack.Collectible.GetCombustibleProperties(world, stack, null)?.MeltingPoint ?? 0;
+
+    /// <summary>
+    /// Whether the chamber will never get hot enough to do anything with this.
+    ///
+    /// No vanilla ware can trigger it. The hottest that this kiln fires melts at 850 - raw
+    /// brick, refractory brick, shingle - and the coolest fuel the firebox will even accept
+    /// still drives the chamber to 900. But the kiln takes anything carrying a kiln tag now,
+    /// and a mod is free to tag something that wants more heat than this makes; firing it
+    /// anyway would be the kiln lying about what it is.
+    /// </summary>
+    private bool IsTooCold(ItemStack stack, float target) => MeltingPointOf(stack, Api.World) > target;
+
     /// <summary>The green wares: the ones a firing still has work to do on.</summary>
     private void WalkWares(Action<BlockEntity, ItemSlot> onWare)
     {
+        // Once, not once per slot: SurveyFuel walks the firebox and this runs every tick.
+        float target = TargetChamberTemperature();
+
         WalkGrate((storage, slot) =>
         {
-            if (IsFireable(slot.Itemstack) && !IsOverfull(slot.Itemstack)) onWare(storage, slot);
+            var stack = slot.Itemstack;
+            if (IsFireable(stack) && !IsOverfull(stack) && !IsTooCold(stack, target)) onWare(storage, slot);
         });
+    }
+
+    /// <summary>
+    /// A ware on the grate that wants more heat than the loaded fuel will give, or null.
+    ///
+    /// Said before the kiln is lit, which is the whole point: finding out afterwards costs a
+    /// firing's worth of fuel and tells you nothing about why.
+    /// </summary>
+    public ItemStack FirstTooColdOnGrate()
+    {
+        float target = TargetChamberTemperature();
+        ItemStack found = null;
+
+        WalkGrate((_, slot) =>
+        {
+            if (found != null) return;
+
+            var stack = slot.Itemstack;
+            if (IsFireable(stack) && !IsOverfull(stack) && IsTooCold(stack, target)) found = stack;
+        });
+
+        return found;
+    }
+
+    /// <summary>The chamber temperature and the melting point, for a message about the two.</summary>
+    public void ChamberVersus(ItemStack stack, out int reaches, out int needs)
+    {
+        reaches = (int)TargetChamberTemperature();
+        needs = MeltingPointOf(stack, Api.World);
     }
 
     /// <summary>
@@ -1309,6 +1370,14 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                 Lang.Get("fornax:too-many-to-fire", overfull.GetName(), MaxFireable(overfull)));
         }
 
+        var tooCold = FirstTooColdOnGrate();
+        if (tooCold != null)
+        {
+            ChamberVersus(tooCold, out int reaches, out int needs);
+            capi.TriggerIngameError(this, "toocold",
+                Lang.Get("fornax:too-cold-to-fire", reaches, tooCold.GetName(), needs));
+        }
+
         if (OwnsGuide) ReleaseGuide(byPlayer);
     }
 
@@ -1411,6 +1480,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (overfull != null)
         {
             dsc.AppendLine(Lang.Get("fornax:too-many-to-fire", overfull.GetName(), MaxFireable(overfull)));
+        }
+
+        var tooCold = FirstTooColdOnGrate();
+        if (tooCold != null)
+        {
+            ChamberVersus(tooCold, out int reaches, out int needs);
+            dsc.AppendLine(Lang.Get("fornax:too-cold-to-fire", reaches, tooCold.GetName(), needs));
         }
 
         int fuel = FuelItemCount();

@@ -34,6 +34,7 @@
 	"fornax:cant-light-nofuel": "Can't light it: the firebox is empty. Right-click it with firewood, peat bricks or charcoal first.",
 	"fornax:cannot-fire": "The kiln can't fire {0} — it will sit on the grate untouched. Only wares stacked directly on the grate are fired.",
 	"fornax:too-many-to-fire": "Too many {0} on the grate — the kiln fires at most {1} to a pile. Take some off, or it will burn a whole firing over them for nothing.",
+	"fornax:too-cold-to-fire": "The chamber will only reach {0}°C on this fuel — {1} needs {2}°C. Burn something hotter, or it will sit there untouched.",
 	"fornax:lit": "Firing: {0:0.#} / {1:0.#} hours of heat.",
 	"fornax:firing-paused": "Firing paused at {0:0.#} / {1:0.#} hours. Light it again before the chamber goes cold, or some of that is lost.",
 	"fornax:chamber-temp": "Chamber: {0:0}°C",

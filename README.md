@@ -97,7 +97,7 @@ names is not a switch.
 | setting | default | |
 |---|---|---|
 | `FireLime` | `true` | lime fires into quicklime on the grate |
-| `FireLimeInBeehiveKiln` | `true` | tags lime for the **vanilla** beehive kiln too, which has no lime recipe of its own. Adds an attribute rather than taking anything away, so it needs no Harmony patch — but note this reaches outside the mod and changes a vanilla block's behaviour |
+| `FireLimeInBeehiveKiln` | `false` | tags lime for the **vanilla** beehive kiln too, which has no lime recipe of its own. Adds an attribute rather than taking anything away, so it needs no Harmony patch. Off because vanilla draws a clean line — `fire` wares go in a kiln, everything else including `cook` goes in a firepit — and bending that inside this mod is one thing, bending it inside a vanilla block for everyone who installs the mod is another |
 | `FireContainersInChamber` | `false` | read wares out of any container in the chamber, and out of the headspace course as well as the grate. This is what makes Stackable Kiln Shelves work, and it is off because shelves are a capacity multiplier this kiln is not costed for |
 | `RespectMaxFireable` | `false` | cap each pile at the ware's own vanilla `maxFireable`, as a pit kiln does — raw brick 12 rather than a full pile of 24. Off because tripling the fuel cost was the correction the kiln needed; this is the tighter version for anyone who wants it |
 
@@ -105,6 +105,25 @@ names is not a switch.
 subtlety is the whole reason the switch works: `BlockEntityKilnShelf` *derives from*
 `BlockEntityGroundStorage`, so `be is BlockEntityGroundStorage` reads a shelf as an ordinary pile
 and fires two courses of shelving no matter what the config says. Compare types exactly.
+
+### Heat
+
+A ware that needs more heat than the loaded fuel will give is not fired, and the kiln says which
+temperature it will reach and which the ware wants — before it is lit, since finding out
+afterwards costs a whole firing. Fuel therefore decides *what* the kiln can fire as well as how
+fast it gets through it:
+
+| fuel | chamber |
+|---|---|
+| coolest the firebox accepts (`MinFuelBurnTemperature` 650) | 900 |
+| firewood (700) | 950 |
+| peat brick (900) | 1150 |
+| charcoal (1300) | 1200 *(`ChamberMaxTemperature`)* |
+
+No vanilla ware can trigger it: the hottest this kiln fires melts at 850 — raw brick, refractory
+brick, shingle — against 900 from the coolest legal fuel. The check exists because the kiln takes
+anything carrying a kiln tag now, and a mod is free to tag something that wants more heat than
+this makes.
 
 ### BulkQuicklime takes the lime away
 
@@ -115,9 +134,6 @@ grate at all, and the pile it substitutes will never fire here. The two features
 exclusive; nothing on this side can reconcile them, so the kiln simply says it cannot fire the
 pile. `LimeFiresIntoQuicklime` detects this and skips rather than failing.
 
-Note the kiln does **not** check `meltingPoint`. Nothing it fires today melts above the chamber
-temperature, so it has never mattered, but a tag on something that needs more heat than the kiln
-reaches would fire anyway.
 
 Grate tiles are clay-formed and then pit-fired, so you must use the old technology once to build
 the new one. The clay-forming pattern is the grate itself — a frame with two cross bars —
