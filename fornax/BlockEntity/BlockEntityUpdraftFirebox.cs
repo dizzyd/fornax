@@ -46,6 +46,10 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     public BlockFacing Orientation { get; private set; } = BlockFacing.NORTH;
 
     private MultiblockStructure structure;
+
+    /// <summary>The structure's block numbers the other way round, which InitForUse keeps private.</summary>
+    private Dictionary<int, AssetLocation> codeByNumber;
+
     private BlockPos centerPos;
 
     // --- persisted state -------------------------------------------------
@@ -107,16 +111,22 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         structure = ResolveStructure(rotYDeg);
 
+        codeByNumber = new Dictionary<int, AssetLocation>();
+        if (structure != null)
+        {
+            foreach (var pair in structure.BlockNumbers) codeByNumber[pair.Value] = pair.Key;
+        }
+
         centerPos = Pos.AddCopy(Orientation.Normali.X * 2, 0, Orientation.Normali.Z * 2);
     }
 
     /// <summary>
     /// The multiblock definition for one orientation, shared by every kiln that faces that way.
     ///
-    /// It is 134 offsets of JSON and works out at 41 KB and 200 microseconds to deserialize -
-    /// paid once per firebox per chunk load if each block entity builds its own, which for a
-    /// player walking past a pottery yard is a steady drip of garbage for no reason. Nothing
-    /// mutates it after InitForUse, so one instance per rotation serves the lot. The cache
+    /// It is 110 offsets of JSON and takes tens of KB and a couple of hundred microseconds to
+    /// deserialize - paid once per firebox per chunk load if each block entity builds its own,
+    /// which for a player walking past a pottery yard is a steady drip of garbage for no reason.
+    /// Nothing mutates it after InitForUse, so one instance per rotation serves the lot. The cache
     /// lives on the API object, so it is per side and goes when the world does.
     /// </summary>
     private MultiblockStructure ResolveStructure(int rotYDeg)
@@ -155,7 +165,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         TendChamber();
 
         bool wasComplete = StructureComplete;
-        StructureComplete = structure.InCompleteBlockCount(Api.World, Pos) == 0;
+        StructureComplete = CountStructureProblems() == 0;
 
         bool dirty = wasComplete != StructureComplete;
 
@@ -440,6 +450,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     {
         if (stack?.Collectible == null) return false;
 
+        if (HasKilnTag(stack)) return true;
+
         var props = stack.Collectible.GetCombustibleProperties(Api.World, stack, null);
         if (props == null) return false;
 
@@ -448,39 +460,181 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return props.SmeltedStack?.ResolvedItemstack?.Block?.BlockMaterial == EnumBlockMaterial.Ceramic;
     }
 
-    /// <summary>Every occupied ground storage slot on the grate, fireable or not.</summary>
-    private void WalkGrate(Action<BlockEntityGroundStorage, ItemSlot> onSlot)
+    /// <summary>
+    /// Whether something is tagged as kiln work.
+    ///
+    /// The two clauses above are a copy of what BlockEntityBeeHiveKiln accepts - minus its
+    /// third, which takes an item on the strength of a "beehivekiln" attribute alone. That is
+    /// the ecosystem's opt-in: a mod tags its item and vanilla fires it. Leaving it out left
+    /// this kiln with no way to be extended at all, so everything that wanted in had to patch
+    /// the multiblock instead. "fornaxkiln" is the same idea aimed at this kiln.
+    ///
+    /// Deliberately cheap - no stack resolution - because every ware is asked this on every
+    /// tick of a firing. <see cref="FiredResult"/> does the resolving, once, at the end.
+    /// </summary>
+    private static bool HasKilnTag(ItemStack stack)
+    {
+        var attributes = stack.Collectible.Attributes;
+        if (attributes == null) return false;
+
+        if (attributes["fornaxkiln"].Exists) return true;
+
+        // A beehivekiln tag is somebody else saying "this is kiln work", which is good enough
+        // for this kiln too - unless this mod is the one that wrote it, in which case it is
+        // about the other kiln and says nothing here. See FornaxModSystem.OurBeehiveTags.
+        return attributes["beehivekiln"].Exists
+            && !FornaxModSystem.OurBeehiveTags.Contains(stack.Collectible.Code);
+    }
+
+    /// <summary>
+    /// The topmost chamber course a firing reaches. Normally just the grate; with containers
+    /// enabled, the headspace above it too, since a stacked kiln shelf is what puts wares there.
+    /// </summary>
+    private int TopWareLevel => Cfg.FireContainersInChamber ? WareLevel + 1 : WareLevel;
+
+    /// <summary>
+    /// Whether the firing reads wares out of this.
+    ///
+    /// Plain ground storage always, and "plain" is meant exactly. Stackable Kiln Shelves'
+    /// block entity <em>derives</em> from BlockEntityGroundStorage, so an "is" test here reads
+    /// a shelf as an ordinary pile and hands this kiln two courses of shelving whatever the
+    /// config says - which is how that mod worked in here by accident before anyone decided it
+    /// should. A subclass is a mod doing something more than a heap on the floor, and that is
+    /// precisely the thing <see cref="FornaxConfig.FireContainersInChamber"/> exists to decide.
+    /// </summary>
+    private bool IsWareHolder(BlockEntity be) =>
+        be is BlockEntityContainer && (Cfg.FireContainersInChamber || IsPlainGroundStorage(be));
+
+    /// <summary>Ground storage itself, and nothing derived from it. See <see cref="IsWareHolder"/>.</summary>
+    public static bool IsPlainGroundStorage(BlockEntity be) =>
+        be?.GetType() == typeof(BlockEntityGroundStorage);
+
+    /// <summary>Every occupied slot in the chamber a firing can reach, fireable or not.</summary>
+    private void WalkGrate(Action<BlockEntity, ItemSlot> onSlot)
     {
         if (centerPos == null) return;
 
         var pos = new BlockPos(Pos.dimension);
 
-        for (int dx = -1; dx <= 1; dx++)
+        for (int y = WareLevel; y <= TopWareLevel; y++)
         {
-            for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++)
             {
-                pos.Set(centerPos.X + dx, centerPos.Y + WareLevel, centerPos.Z + dz);
-
-                if (Api.World.BlockAccessor.GetBlockEntity(pos) is not BlockEntityGroundStorage storage) continue;
-
-                for (int i = 0; i < storage.Inventory.Count; i++)
+                for (int dz = -1; dz <= 1; dz++)
                 {
-                    var slot = storage.Inventory[i];
-                    if (slot.Empty) continue;
+                    pos.Set(centerPos.X + dx, centerPos.Y + y, centerPos.Z + dz);
 
-                    onSlot(storage, slot);
+                    var be = Api.World.BlockAccessor.GetBlockEntity(pos);
+                    if (!IsWareHolder(be)) continue;
+
+                    var inventory = ((BlockEntityContainer)be).Inventory;
+
+                    for (int i = 0; i < inventory.Count; i++)
+                    {
+                        var slot = inventory[i];
+                        if (slot.Empty) continue;
+
+                        onSlot(be, slot);
+                    }
                 }
             }
         }
     }
 
+    /// <summary>
+    /// Something sitting on the grate that a firing will not touch, named so it can be said out
+    /// loud, or null if the grate holds nothing but wares.
+    ///
+    /// Two ways to end up here. A block in a ware position that is not ground storage - a modded
+    /// kiln shelf, a chest, a lime pile - is legal structurally, since the chamber only refuses
+    /// solid cubes, but <see cref="WalkGrate"/> reads ground storage and nothing else, so its
+    /// contents are simply not part of the batch. And an item with no fire-smelting path is
+    /// ground-stored quite happily and then ignored. Both used to be silent.
+    /// </summary>
+    public string FirstUnfireableOnGrate()
+    {
+        if (centerPos == null) return null;
+
+        var pos = new BlockPos(Pos.dimension);
+
+        for (int y = WareLevel; y <= TopWareLevel; y++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dz = -1; dz <= 1; dz++)
+                {
+                    pos.Set(centerPos.X + dx, centerPos.Y + y, centerPos.Z + dz);
+
+                    var block = Api.World.BlockAccessor.GetBlock(pos);
+                    if (block.Id == 0) continue;
+
+                    // A solid cube here is an obstruction, which the structure survey already
+                    // reports. Saying it twice, in two different registers, helps nobody.
+                    if (!IsChamberClear(block)) continue;
+
+                    var be = Api.World.BlockAccessor.GetBlockEntity(pos);
+                    if (!IsWareHolder(be)) return BlockName(block, pos);
+
+                    var inventory = ((BlockEntityContainer)be).Inventory;
+
+                    for (int i = 0; i < inventory.Count; i++)
+                    {
+                        var slot = inventory[i];
+                        if (slot.Empty || IsFireable(slot.Itemstack)) continue;
+
+                        // A finished batch is unfireable too, and saying so would be nonsense.
+                        if (BatchFired) continue;
+
+                        return slot.Itemstack.GetName();
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// How many of a ware the kiln will take in one slot, or no limit if it does not say.
+    ///
+    /// maxFireable is vanilla's own per-ware cap - raw brick is 12 - and ground storage enforces
+    /// it when you light a pit kiln, with "Can only fire up to {0} at once". Ground storage will
+    /// hold twice that: a brick pile stacks to 24. Reading the cap is what keeps this kiln to
+    /// 108 raw bricks a firing rather than 216, against 12 in a pit kiln.
+    /// </summary>
+    private static int MaxFireable(ItemStack stack) =>
+        stack.Collectible.GetBehavior<CollectibleBehaviorGroundStorable>()?.StorageProps?.MaxFireable
+        ?? int.MaxValue;
+
+    private bool IsOverfull(ItemStack stack) =>
+        Cfg.RespectMaxFireable && stack.StackSize > MaxFireable(stack);
+
     /// <summary>The green wares: the ones a firing still has work to do on.</summary>
-    private void WalkWares(Action<BlockEntityGroundStorage, ItemSlot> onWare)
+    private void WalkWares(Action<BlockEntity, ItemSlot> onWare)
     {
         WalkGrate((storage, slot) =>
         {
-            if (IsFireable(slot.Itemstack)) onWare(storage, slot);
+            if (IsFireable(slot.Itemstack) && !IsOverfull(slot.Itemstack)) onWare(storage, slot);
         });
+    }
+
+    /// <summary>
+    /// A pile on the grate with more in it than the kiln will fire at once, or null.
+    ///
+    /// Reported rather than quietly skipped: an overfull pile looks exactly like a loaded one,
+    /// and finding out by burning a firing's worth of fuel over it is not a fair way to learn.
+    /// </summary>
+    public ItemStack FirstOverfullOnGrate()
+    {
+        ItemStack found = null;
+
+        WalkGrate((_, slot) =>
+        {
+            if (found != null) return;
+            if (IsFireable(slot.Itemstack) && IsOverfull(slot.Itemstack)) found = slot.Itemstack;
+        });
+
+        return found;
     }
 
     public int CountWares()
@@ -523,13 +677,18 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         {
             var raw = slot.Itemstack;
             var props = raw.Collectible.GetCombustibleProperties(Api.World, raw, null);
-            var fired = props?.SmeltedStack?.ResolvedItemstack;
+            var fired = FiredResult(raw, props);
             if (fired == null) return;
 
             float temperature = raw.Collectible.GetTemperature(Api.World, raw);
-            int ratio = Math.Max(1, props.SmeltedRatio);
 
-            storage.forceStorageProps = true;
+            // props can be absent entirely on something that is here only by its kiln tag.
+            int ratio = Math.Max(1, props?.SmeltedRatio ?? 1);
+
+            // Ground storage renders a pile from its contents' own storage props, and a fired
+            // ware's differ from a green one's. Nothing else in the chamber works that way.
+            if (storage is BlockEntityGroundStorage groundStorage) groundStorage.forceStorageProps = true;
+
             slot.Itemstack = fired.Clone();
             slot.Itemstack.StackSize = Math.Max(1, raw.StackSize / ratio);
             slot.Itemstack.Collectible.SetTemperature(Api.World, slot.Itemstack, temperature);
@@ -546,6 +705,41 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         CrackSeals();
 
         Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/ceramicplace"), Pos.X + 0.5, Pos.Y + 0.5, Pos.Z + 0.5, null, false, 24);
+    }
+
+    /// <summary>
+    /// What a ware comes out as, in the order the three sources are trusted.
+    ///
+    /// "fornaxkiln" first, because it is a statement about this kiln specifically: whoever set
+    /// it meant it. Then combustibleProps, which is what the ware already said it becomes.
+    ///
+    /// "beehivekiln" last, and only as a fallback for a ware that has nothing else - which is
+    /// the whole reason this ordering is not the obvious one. That attribute is keyed 0-3 by how
+    /// many of that kiln's doors stand open, since that is what decides how much air reaches the
+    /// wares, and key "0" is the fully reducing firing that a mud-sealed chamber physically is.
+    /// Taking it whenever it exists would be the truer simulation, but it would also quietly
+    /// hand this kiln the tans and creams that are a beehive kiln's to give - a red raw brick
+    /// would fire to tan here rather than red. Reading the tag only when combustibleProps is
+    /// silent keeps every existing ware firing to exactly what it fires to today, and still lets
+    /// a tag-only ware convert instead of sitting on the grate forever.
+    /// </summary>
+    private ItemStack FiredResult(ItemStack raw, CombustibleProperties props)
+    {
+        var own = raw.Collectible.Attributes?["fornaxkiln"];
+        if (own?.Exists == true && ResolveTagged(own) is ItemStack named) return named;
+
+        if (props?.SmeltedStack?.ResolvedItemstack != null) return props.SmeltedStack.ResolvedItemstack;
+
+        var beehive = raw.Collectible.Attributes?["beehivekiln"];
+        return beehive?.Exists == true ? ResolveTagged(beehive["0"]) : null;
+    }
+
+    private ItemStack ResolveTagged(JsonObject json)
+    {
+        if (json == null || !json.Exists) return null;
+
+        var stack = json.AsObject<JsonItemStack>();
+        return stack?.Resolve(Api.World, "fornax firing result", false) == true ? stack.ResolvedItemstack : null;
     }
 
     /// <summary>Every firing destroys the mud seals; the entrance must be re-sealed for the next batch.</summary>
@@ -627,18 +821,23 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             return;
         }
 
-        int missing = structure?.InCompleteBlockCount(Api.World, Pos) ?? 0;
-        if (missing > 0)
+        var survey = Survey();
+        if (survey.Total > 0)
         {
-            capi.TriggerIngameError(this, "incomplete", Lang.Get("fornax:cant-light-incomplete", missing));
-
-            var player = (byEntity as EntityPlayer)?.Player;
-            if (player != null && structure != null)
+            // "You left a stone slab in the chamber" and "you have 40 walls still to build" are
+            // the same number to the structure check and nothing alike to whoever is holding the
+            // firestarter, so they do not get the same sentence.
+            if (survey.OnlyObstructions)
             {
-                TakeGuide();
-                structure.HighlightIncompleteParts(Api.World, player, Pos);
+                capi.TriggerIngameError(this, "obstructed",
+                    Lang.Get("fornax:cant-light-obstructed", survey.ObstructionName));
+            }
+            else
+            {
+                capi.TriggerIngameError(this, "incomplete", Lang.Get("fornax:cant-light-incomplete", survey.Total));
             }
 
+            HighlightProblems((byEntity as EntityPlayer)?.Player);
             return;
         }
 
@@ -781,31 +980,74 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     }
 
     // =====================================================================
-    //  Build guide
+    //  Structure check & build guide
     // =====================================================================
+
+    /// <summary>
+    /// The structure's stand-in code for "this position is inside the kiln". Positions carrying
+    /// it are judged by <see cref="IsChamberClear"/> instead of by block code.
+    /// </summary>
+    private static bool IsChamber(AssetLocation wanted) =>
+        wanted != null && wanted.Domain == "fornax" && wanted.Path == "chamber";
+
+    /// <summary>
+    /// Whether a chamber position is acceptable. Anything that is not a solid cube passes: wares
+    /// in ground storage, a lime pile, a modded kiln shelf, a torch somebody dropped in there.
+    /// Only something that would genuinely wall the chamber off counts as an obstruction.
+    ///
+    /// The beehive kiln matches these positions by block code - "@(air|groundstorage)" - and so
+    /// did this, which makes every mod that invents a new way to hold wares an incompatibility
+    /// until somebody ships a JSON patch naming it. Both BulkQuicklime and Stackable Kiln Shelves
+    /// ship exactly that patch against the beehive kiln, and clobber each other doing it. Judging
+    /// the space rather than the name costs nothing and needs no such list.
+    /// </summary>
+    private static bool IsChamberClear(Block have) => have.Id == 0 || !have.SideSolid.All;
+
+    /// <summary>
+    /// What to call a block in a message. Blocks that assemble their placed name out of what
+    /// they are holding - a coal pile, ground storage - hand back an empty string when they are
+    /// holding nothing, which would put "the kiln can't fire ." in front of the player.
+    /// </summary>
+    private string BlockName(Block block, BlockPos at)
+    {
+        string name = block.GetPlacedBlockName(Api.World, at);
+        if (Readable(name)) return name;
+
+        name = block.GetHeldItemName(new ItemStack(block));
+        return Readable(name) ? name : block.Code.ToShortString();
+    }
+
+    /// <summary>
+    /// Lang.Get hands back the key it was given when nothing translates it, so a mod that ships
+    /// no lang file - BulkQuicklime is one - would otherwise put "bulkquicklime:block-limepile"
+    /// in front of the player. The block's own code reads better than that.
+    /// </summary>
+    private static bool Readable(string name) =>
+        !string.IsNullOrWhiteSpace(name) && !name.Contains(":block-") && !name.Contains(":item-");
+
+    /// <summary>The one rule for whether a structure position is what it should be.</summary>
+    private static bool Matches(AssetLocation wanted, Block have) =>
+        IsChamber(wanted) ? IsChamberClear(have) : WildcardUtil.Match(wanted, have.Code);
 
     /// <summary>
     /// Every structure position that is not yet what it should be, with a colour keyed to the
     /// block that belongs there. Computed here rather than through
-    /// MultiblockStructure.HighlightIncompleteParts so the positions can be asserted in a test
-    /// and so obstructions read differently from things simply not built yet.
+    /// MultiblockStructure.HighlightIncompleteParts so the positions can be asserted in a test,
+    /// so obstructions read differently from things simply not built yet, and so the chamber can
+    /// be judged by <see cref="IsChamberClear"/> rather than by code.
     /// </summary>
     public List<BlockPos> MissingStructurePositions(List<int> colors = null, List<Block> wantedBlocks = null)
     {
         var missing = new List<BlockPos>();
-        if (structure?.TransformedOffsets == null) return missing;
-
-        // InitForUse builds this same map, but keeps it private.
-        var codeByNumber = new Dictionary<int, AssetLocation>();
-        foreach (var pair in structure.BlockNumbers) codeByNumber[pair.Value] = pair.Key;
+        if (structure?.TransformedOffsets == null || codeByNumber == null) return missing;
 
         foreach (var offset in structure.TransformedOffsets)
         {
-            var at = new BlockPos(Pos.X + offset.X, Pos.Y + offset.Y, Pos.Z + offset.Z, Pos.dimension);
             if (!codeByNumber.TryGetValue(offset.W, out var wanted)) continue;
 
+            var at = new BlockPos(Pos.X + offset.X, Pos.Y + offset.Y, Pos.Z + offset.Z, Pos.dimension);
             var have = Api.World.BlockAccessor.GetBlock(at);
-            if (WildcardUtil.Match(wanted, have.Code)) continue;
+            if (Matches(wanted, have)) continue;
 
             missing.Add(at);
             colors?.Add(GuideColor(wanted, have));
@@ -816,23 +1058,100 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     }
 
     /// <summary>
+    /// The same walk as <see cref="MissingStructurePositions"/> without the allocations, for the
+    /// three-second tick, which asks this of every loaded kiln and almost always gets nothing.
+    /// </summary>
+    private int CountStructureProblems()
+    {
+        if (structure?.TransformedOffsets == null || codeByNumber == null) return 0;
+
+        var at = new BlockPos(Pos.dimension);
+        var offsets = structure.TransformedOffsets;
+        int wrong = 0;
+
+        for (int i = 0; i < offsets.Count; i++)
+        {
+            var offset = offsets[i];
+            if (!codeByNumber.TryGetValue(offset.W, out var wanted)) continue;
+
+            at.Set(Pos.X + offset.X, Pos.Y + offset.Y, Pos.Z + offset.Z);
+            if (!Matches(wanted, Api.World.BlockAccessor.GetBlock(at))) wrong++;
+        }
+
+        return wrong;
+    }
+
+    /// <summary>
+    /// What is wrong with the kiln, split by the kind of problem, because the three read
+    /// completely differently to whoever is standing in front of it: a wall that was never
+    /// built, something left in the chamber that has to come out, and the six mud seals that
+    /// every firing cracks on purpose.
+    /// </summary>
+    public StructureSurvey Survey()
+    {
+        var survey = new StructureSurvey();
+
+        foreach (var at in MissingStructurePositions())
+        {
+            var have = Api.World.BlockAccessor.GetBlock(at);
+
+            if (have.Code?.Domain == "fornax" && have.Code.Path == "kilnseal-cracked")
+            {
+                survey.CrackedSeals++;
+            }
+            else if (have.Id != 0)
+            {
+                survey.Obstructed++;
+                survey.FirstObstruction ??= at;
+                survey.ObstructionName ??= BlockName(have, at);
+            }
+            else
+            {
+                survey.Unbuilt++;
+            }
+
+            survey.Total++;
+        }
+
+        return survey;
+    }
+
+    /// <summary>See <see cref="Survey"/>.</summary>
+    public class StructureSurvey
+    {
+        /// <summary>Positions that are not what they should be, of any kind.</summary>
+        public int Total;
+
+        /// <summary>Positions where the block that belongs there simply is not there yet.</summary>
+        public int Unbuilt;
+
+        /// <summary>Positions inside the kiln filled by something solid.</summary>
+        public int Obstructed;
+
+        /// <summary>Seals the last firing cracked. Not damage - that is how a kiln is opened.</summary>
+        public int CrackedSeals;
+
+        public BlockPos FirstObstruction;
+        public string ObstructionName;
+
+        /// <summary>Nothing wrong but the seals a firing cracked: a finished kiln, not a broken one.</summary>
+        public bool OnlyCrackedSeals => Total > 0 && Total == CrackedSeals;
+
+        /// <summary>
+        /// Nothing wrong but things left in the chamber - so "take it out and the kiln is
+        /// ready" is true, which it would not be with a wall or a seal also missing.
+        /// </summary>
+        public bool OnlyObstructions => Total > 0 && Total == Obstructed;
+    }
+
+    /// <summary>
     /// How many structure positions are wrong, and how many of those are cracked mud seals.
-    /// Every firing cracks the six seals across the loading entrance, so on a kiln that has
-    /// just finished a batch those are the whole of what is "wrong" with it - which is worth
-    /// telling apart from a kiln somebody has knocked a hole in.
     /// </summary>
     public int CountMissing(out int crackedSeals)
     {
-        crackedSeals = 0;
-
-        var missing = MissingStructurePositions();
-        foreach (var at in missing)
-        {
-            var have = Api.World.BlockAccessor.GetBlock(at);
-            if (have.Code?.Domain == "fornax" && have.Code.Path == "kilnseal-cracked") crackedSeals++;
-        }
-
-        return missing.Count;
+        var survey = Survey();
+        crackedSeals = survey.CrackedSeals;
+        return survey.Total;
     }
 
     /// <summary>
@@ -844,7 +1163,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     {
         string path = wanted.Path;
 
-        if (path.StartsWith("air") || path.Contains("groundstorage")) return null;
+        if (IsChamber(wanted)) return null;
         if (path.Contains("mudbrick") || path.Contains("cob")) return Api.World.GetBlock(new AssetLocation("game", "mudbrick-dark"));
         if (path.Contains("kilnfirebox")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnfirebox-cold-north"));
         if (path.Contains("kilnvent")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnvent-idle"));
@@ -865,8 +1184,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         // Kept deliberately faint: the ghost block underneath carries the texture, and this
         // is only a hint at which is which. An obstruction is the exception - that one needs
         // to shout, because it is the only case where you have to remove something.
-        if ((path.StartsWith("air") || path.Contains("groundstorage")) && have.Id != 0)
-            return ColorUtil.ColorFromRgba(215, 70, 70, 130);
+        if (IsChamber(wanted)) return ColorUtil.ColorFromRgba(215, 70, 70, 130);
 
         if (path.Contains("kilngrate")) return ColorUtil.ColorFromRgba(150, 200, 225, 55);
         if (path.Contains("kilnseal")) return ColorUtil.ColorFromRgba(90, 130, 210, 55);
@@ -933,24 +1251,62 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (Api is ICoreClientAPI capi) capi.TriggerIngameError(this, code, Lang.Get(langKey));
     }
 
+    /// <summary>
+    /// Paints every wrong position in the guide's shared highlight slot. The vanilla
+    /// MultiblockStructure.HighlightIncompleteParts would do this, but it re-runs its own
+    /// code-only check, which no longer agrees with <see cref="Matches"/> about the chamber.
+    /// </summary>
+    private void HighlightProblems(IPlayer byPlayer)
+    {
+        if (byPlayer == null || Api is not ICoreClientAPI) return;
+
+        var colors = new List<int>();
+        var missing = MissingStructurePositions(colors);
+
+        TakeGuide();
+        Api.World.HighlightBlocks(byPlayer, MultiblockStructure.HighlightSlotId, missing, colors);
+    }
+
     private void ShowStructureProblems(IPlayer byPlayer)
     {
         if (Api is not ICoreClientAPI capi || structure == null) return;
 
-        int missing = CountMissing(out int crackedSeals);
+        var survey = Survey();
 
-        if (missing > 0)
+        if (survey.Total > 0)
         {
             // Nothing wrong but the seals the firing cracked: that is a finished kiln, not a
             // broken one. Still highlight them, since they are what has to be broken to unload.
-            capi.TriggerIngameError(this, BatchFired && missing == crackedSeals ? "done" : "incomplete",
-                BatchFired && missing == crackedSeals
-                    ? Lang.Get("fornax:firing-done")
-                    : Lang.Get("fornax:structure-incomplete", missing));
+            if (BatchFired && survey.OnlyCrackedSeals)
+            {
+                capi.TriggerIngameError(this, "done", Lang.Get("fornax:firing-done"));
+            }
+            else if (survey.OnlyObstructions)
+            {
+                capi.TriggerIngameError(this, "obstructed",
+                    Lang.Get("fornax:structure-obstructed", survey.ObstructionName));
+            }
+            else
+            {
+                capi.TriggerIngameError(this, "incomplete", Lang.Get("fornax:structure-incomplete", survey.Total));
+            }
 
-            TakeGuide();
-            structure.HighlightIncompleteParts(Api.World, byPlayer, Pos);
+            HighlightProblems(byPlayer);
             return;
+        }
+
+        // The shell is sound, so anything left to say is about what is on the grate.
+        string unfireable = FirstUnfireableOnGrate();
+        if (unfireable != null)
+        {
+            capi.TriggerIngameError(this, "unfireable", Lang.Get("fornax:cannot-fire", unfireable));
+        }
+
+        var overfull = FirstOverfullOnGrate();
+        if (overfull != null)
+        {
+            capi.TriggerIngameError(this, "overfull",
+                Lang.Get("fornax:too-many-to-fire", overfull.GetName(), MaxFireable(overfull)));
         }
 
         if (OwnsGuide) ReleaseGuide(byPlayer);
@@ -961,7 +1317,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         var mouth = Pos.ToVec3d().Add(0.5, 0.5, 0.5)
             .Add(Orientation.Opposite.Normali.X * 0.6, 0, Orientation.Opposite.Normali.Z * 0.6);
 
-        var entities = Api.World.GetEntitiesAround(mouth, (float)Cfg.FireboxBurnRadius, 2f, e => e.Alive && e is EntityAgent);
+        var entities = Api.World.GetEntitiesAround(mouth, Cfg.FireboxBurnRadius, 2f, e => e.Alive && e is EntityAgent);
 
         foreach (var entity in entities)
         {
@@ -1014,7 +1370,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     {
         if (structure == null) return;
 
-        int missing = CountMissing(out int crackedSeals);
+        var survey = Survey();
+        int missing = survey.Total;
 
         // A finished batch cracks every seal, so the kiln calls itself broken at the exact
         // moment it has done its job. Lead with what actually happened, and only add the raw
@@ -1022,7 +1379,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (BatchFired)
         {
             dsc.AppendLine(Lang.Get("fornax:firing-done"));
-            if (missing > crackedSeals) dsc.AppendLine(Lang.Get("fornax:structure-incomplete", missing));
+            if (missing > survey.CrackedSeals) dsc.AppendLine(Lang.Get("fornax:structure-incomplete", missing));
+        }
+        else if (survey.OnlyObstructions)
+        {
+            dsc.AppendLine(Lang.Get("fornax:structure-obstructed", survey.ObstructionName));
         }
         else if (missing > 0)
         {
@@ -1039,6 +1400,18 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (wares > 0) dsc.AppendLine(Lang.Get("fornax:wares-loaded", wares));
         if (finished > 0) dsc.AppendLine(Lang.Get("fornax:fired-wares", finished));
         if (wares == 0 && finished == 0) dsc.AppendLine(Lang.Get("fornax:no-wares"));
+
+        // Say it here as well as on the click, so a kiln loaded with something it will never
+        // fire says so while you are still looking at it rather than after it has burned a
+        // firing's worth of firewood for nothing.
+        string unfireable = FirstUnfireableOnGrate();
+        if (unfireable != null) dsc.AppendLine(Lang.Get("fornax:cannot-fire", unfireable));
+
+        var overfull = FirstOverfullOnGrate();
+        if (overfull != null)
+        {
+            dsc.AppendLine(Lang.Get("fornax:too-many-to-fire", overfull.GetName(), MaxFireable(overfull)));
+        }
 
         int fuel = FuelItemCount();
         if (fuel > 0)

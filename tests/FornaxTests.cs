@@ -11,7 +11,7 @@ using VsTestkit.Testing;
 using static VsTestkit.Testing.Vs;
 
 /// <summary>
-/// The updraft kiln is almost entirely string- and structure-driven: a 125-entry multiblock
+/// The updraft kiln is almost entirely string- and structure-driven: a 110-entry multiblock
 /// definition, block codes resolved by wildcard, and wares converted through combustibleProps.
 /// None of that is checked by the compiler, so all of it is checked here.
 /// </summary>
@@ -429,6 +429,30 @@ public class FornaxTests
         await Ticks(1);
     }
 
+    /// <summary>What each seal state actually yields when broken.</summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task SealDropsAreWhatTheyShouldBe()
+    {
+        foreach (var code in new[] { "fornax:kilnseal-intact", "fornax:kilnseal-cracked" })
+        {
+            BlockPos at = P(4, 1, 4);
+            World.SetBlock(code, at);
+            await Ticks(2);
+
+            var block = World.GetBlock(at);
+            var drops = block.GetDrops(Sapi.World, at, null);
+            string got = drops == null || drops.Length == 0
+                ? "nothing"
+                : string.Join(", ", drops.Select(d => d.StackSize + "x " + d.Collectible.Code));
+            Log($"{code} -> {got}");
+        }
+        await Ticks(1);
+    }
+
+    // ------------------------------------------------------------------
+    //  Multiblock validation
+    // ------------------------------------------------------------------
+
     [VsTest(TimeoutMs = 120000)]
     public async Task CompleteStructureValidates()
     {
@@ -453,19 +477,607 @@ public class FornaxTests
         Assert.True(!Be().StructureComplete, "removing the draft vent should invalidate the structure");
     }
 
+    /// <summary>
+    /// The corbelled silhouette is what the kiln should look like, not a rule. The corner
+    /// notches and the ring around the neck sit outside the sealed chamber, so pinning them
+    /// to air only ever stopped players leaning things against their own kiln.
+    /// </summary>
     [VsTest(TimeoutMs = 120000)]
-    public async Task SquaringOffTheCorbelBreaksTheStructure()
+    public async Task TheCorbelSilhouetteIsCosmetic()
     {
         BuildKiln();
         await Ticks(2);
         await Tick3s();
         Assert.True(Be().StructureComplete);
 
-        // fill a corner of the stepped-in course back out to the full 5x5
-        World.SetBlock(Wall, Fb().AddCopy(2, 4, 0));
+        // fill the stepped-in course back out to the full 5x5, and block up the corner
+        // notches of the drum for good measure
+        foreach (var at in new[]
+        {
+            Fb().AddCopy(2, 4, 0), Fb().AddCopy(-2, 4, 0), Fb().AddCopy(2, 4, -4), Fb().AddCopy(0, 4, 0),
+            Fb().AddCopy(2, 2, 0), Fb().AddCopy(-2, 3, -4)
+        })
+        {
+            World.SetBlock(Wall, at);
+        }
+
+        await Tick3s();
+        Assert.True(Be().StructureComplete, "building onto the outside of the kiln must not break it");
+    }
+
+    /// <summary>
+    /// The flue up the middle of the neck is not decoration, so it is still checked - by the
+    /// same "is it a solid cube" rule as the rest of the chamber.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task BlockingTheFlueBreaksTheStructure()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete);
+
+        World.SetBlock(Wall, Fb().AddCopy(0, 4, -2));
         await Tick3s();
 
-        Assert.True(!Be().StructureComplete, "the top course must corbel in, not stay square");
+        Assert.True(!Be().StructureComplete, "a bricked-up flue should invalidate the structure");
+    }
+
+    /// <summary>
+    /// The chamber is judged by whether it is clear, not by block code. Matching codes the way
+    /// the beehive kiln does makes every mod that invents a new way to hold wares - a lime pile,
+    /// a kiln shelf - an incompatibility that reads to the player as "structure incomplete".
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AnythingThatIsNotSolidMayStandInTheChamber()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete);
+
+        // stand-ins for what mods put in a kiln: none of these are game:groundstorage
+        foreach (var code in new[] { "game:coalpile", "game:torch-basic-lit-up", "game:tallgrass-tall-free" })
+        {
+            var block = Sapi.World.GetBlock(new AssetLocation(code));
+            if (block == null) { Log($"{code} is not registered, skipping"); continue; }
+
+            World.SetBlock(code, Ware(1, -1));
+            await Tick3s();
+
+            Log($"{code} in the chamber -> complete={Be().StructureComplete}");
+            Assert.True(Be().StructureComplete, $"{code} is not a solid cube and should not break the kiln");
+
+            World.SetBlock("game:air", Ware(1, -1));
+            await Tick3s();
+        }
+    }
+
+    /// <summary>
+    /// A brick left in the chamber and forty walls never built are the same number to the
+    /// structure check and nothing alike to the player, so they must not get the same sentence.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AnObstructionIsReportedAsOneRatherThanAsMissingBlocks()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+
+        World.SetBlock(Wall, Ware(0, 0));
+        await Tick3s();
+
+        var survey = Be().Survey();
+        Log($"blocked chamber -> total={survey.Total} unbuilt={survey.Unbuilt} " +
+            $"obstructed={survey.Obstructed} name={survey.ObstructionName}");
+
+        Assert.Equal(1, survey.Total);
+        Assert.Equal(1, survey.Obstructed);
+        Assert.Equal(0, survey.Unbuilt);
+        Assert.Equal(Ware(0, 0), survey.FirstObstruction);
+        Assert.True(!string.IsNullOrWhiteSpace(survey.ObstructionName));
+
+        var dsc = new System.Text.StringBuilder();
+        Be().GetBlockInfo(null, dsc);
+        string info = dsc.ToString();
+        Log("block info:\n" + info.TrimEnd());
+
+        Assert.True(info.Contains(Lang.Get("fornax:structure-obstructed", survey.ObstructionName)),
+            "it should name what is in the way");
+        Assert.True(!info.Contains(Lang.Get("fornax:structure-incomplete", 1)),
+            "and must not call an obstruction a missing block");
+        Assert.True(!info.Contains(Lang.Get("fornax:cannot-fire", survey.ObstructionName)),
+            "nor say the same thing twice as something it cannot fire");
+
+        // knock a wall out too: "take it out and the kiln is ready" stops being true, so the
+        // count has to come back
+        World.SetBlock("game:air", Fb().AddCopy(2, 1, -2));
+        await Tick3s();
+
+        survey = Be().Survey();
+        Assert.Equal(2, survey.Total);
+        Assert.True(!survey.OnlyObstructions, "a hole in the wall is not an obstruction");
+
+        dsc = new System.Text.StringBuilder();
+        Be().GetBlockInfo(null, dsc);
+        Log("with a wall missing too:\n" + dsc.ToString().TrimEnd());
+        Assert.True(dsc.ToString().Contains(Lang.Get("fornax:structure-incomplete", 2)),
+            "with a wall missing as well it is back to a count");
+    }
+
+    /// <summary>
+    /// Things the kiln will never fire used to sit on the grate in complete silence, and a
+    /// firing's worth of firewood would go by before anyone noticed. Two ways in: a container
+    /// that is not ground storage, and an item with no fire-smelting path.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task TheKilnSaysWhatItWillNotFire()
+    {
+        BuildKiln();
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete);
+        Assert.Null(Be().FirstUnfireableOnGrate(), "an empty grate has nothing to complain about");
+
+        // a block in a ware slot that is not ground storage: legal structurally, but its
+        // contents are not part of the batch
+        World.SetBlock("game:coalpile", Ware(1, 1));
+        await Tick3s();
+
+        string named = Be().FirstUnfireableOnGrate();
+        Log($"coal pile on the grate -> {named}");
+        Assert.True(Be().StructureComplete, "a coal pile is not an obstruction");
+        Assert.True(!string.IsNullOrWhiteSpace(named), "and it has to be nameable, or the message reads \"can't fire .\"");
+        Assert.True(!named.Contains(":block-"), "and nameable means a name, not an untranslated lang key");
+
+        World.SetBlock("game:air", Ware(1, 1));
+        await Tick3s();
+
+        // and an item that simply has no fire-smelting path
+        LoadWare(0, 0, "game:stone-granite", 4);
+        await Tick3s();
+
+        named = Be().FirstUnfireableOnGrate();
+        Log($"granite on the grate -> {named}");
+        Assert.True(!string.IsNullOrWhiteSpace(named));
+
+        var dsc = new System.Text.StringBuilder();
+        Be().GetBlockInfo(null, dsc);
+        string info = dsc.ToString();
+        Log("block info:\n" + info.TrimEnd());
+        Assert.True(info.Contains(Lang.Get("fornax:cannot-fire", named)), "it should say so on the block info");
+
+        // wares it can fire draw no complaint
+        World.SetBlock("game:air", Ware(0, 0));
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        await Tick3s();
+        Assert.Null(Be().FirstUnfireableOnGrate(), "green wares are not a problem");
+    }
+
+    /// <summary>
+    /// Crushed lime is ground-storable in vanilla and already knows it becomes quicklime, but
+    /// its smeltingType is "cook" and its product is an item, so the kiln's two combustibleProps
+    /// clauses both miss it. The fornaxkiln tag is what lets it in.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task LimeFiresIntoQuicklime()
+    {
+        var lime = Sapi.World.GetItem(new AssetLocation("game:lime"));
+        Assert.NotNull(lime, "vanilla crushed lime should be registered");
+
+        Assert.True(lime.Attributes?["fornaxkiln"].Exists == true, "fornax should have tagged lime");
+
+        // The other half of it, and the half another mod can take away: BulkQuicklime patches
+        // "remove /behaviors/0" onto vanilla lime, which is exactly its GroundStorable, and
+        // replaces it with a limepile block that only its own beehive kiln patch cooks. With
+        // that mod installed there is no way to get lime onto the grate at all, so the two
+        // features are mutually exclusive and this test has nothing left to check.
+        if (lime.GetBehavior<CollectibleBehaviorGroundStorable>() == null)
+        {
+            Log("lime is not ground storable - another mod has removed the behaviour, " +
+                "so it cannot be put on the grate. Skipping the firing.");
+            return;
+        }
+
+        // Messy12 holds 12 to a block, so a full grate is 9 x 12 lime, not 9 x 64.
+        BuildKiln();
+        LoadWare(0, 0, "game:lime", 12);
+        Fuel("game:firewood", 32);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.Equal(12, be.CountWares(), "tagged lime should count as a ware");
+        Assert.Null(be.FirstUnfireableOnGrate(), "and must not be reported as something it cannot fire");
+
+        be.TryIgnite(null);
+        for (int i = 0; i < 8 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        Assert.True(!be.Lit, "the firing should have finished");
+
+        var gs = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        var got = gs.Inventory[0].Itemstack;
+        Log($"12 lime -> {got?.StackSize}x {got?.Collectible?.Code}  " +
+            $"(a full grate of nine would be 108 -> 54)");
+
+        Assert.Equal("game:quicklime", got.Collectible.Code.ToString());
+        Assert.Equal(6, got.StackSize, "smeltedRatio 2 - two lime to one quicklime");
+    }
+
+    /// <summary>
+    /// maxFireable is vanilla's per-ware cap on how many go in at once - raw brick is 12 - and a
+    /// pit kiln enforces it. Ground storage holds twice that, so ignoring it made this kiln 216
+    /// raw bricks a firing against a pit kiln's 12. An overfull pile is not fired, and is said
+    /// out loud rather than quietly skipped.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AnOverfullPileIsNotFiredAndSaysSo()
+    {
+        Assert.True(!Cfg.RespectMaxFireable, "off by default - tripling the fuel cost was the correction");
+
+        // Read both numbers off the ware rather than writing vanilla's in: Bricklayers, for one,
+        // raises raw brick's maxFireable from 12 to 16, and a hardcoded 12 here fails against a
+        // kiln that is behaving perfectly.
+        var brick = Sapi.World.GetItem(new AssetLocation("game:rawbrick-blue"));
+        var storage = brick.GetBehavior<CollectibleBehaviorGroundStorable>()?.StorageProps;
+        Assert.NotNull(storage);
+
+        int cap = storage.MaxFireable;
+        int pile = storage.StackingCapacity;
+        Log($"raw brick: maxFireable={cap}, a full pile={pile}");
+        Assert.Greater(pile, cap, "the test needs a pile that can hold more than the cap allows");
+
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", pile);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Log($"cap off, {pile} raw bricks -> wares={be.CountWares()}");
+        Assert.Equal(pile, be.CountWares(), "by default a full pile fires");
+        Assert.Null(be.FirstOverfullOnGrate());
+
+        try
+        {
+            Cfg.RespectMaxFireable = true;
+            await Tick3s();
+
+            var overfull = be.FirstOverfullOnGrate();
+            Log($"cap on, {pile} raw bricks -> wares={be.CountWares()}, overfull={overfull?.Collectible?.Code}");
+
+            Assert.Equal(0, be.CountWares(), "an overfull pile is not a ware");
+            Assert.NotNull(overfull, "and the kiln has to say so");
+
+            var dsc = new System.Text.StringBuilder();
+            be.GetBlockInfo(null, dsc);
+            string info = dsc.ToString();
+            Log("block info:\n" + info.TrimEnd());
+            Assert.True(info.Contains(Lang.Get("fornax:too-many-to-fire", overfull.GetName(), cap)),
+                "the block info should name the ware and its own cap");
+
+            // at the cap it fires normally
+            World.SetBlock("game:air", Ware(0, 0));
+            LoadWare(0, 0, "game:rawbrick-blue", cap);
+            await Tick3s();
+
+            Log($"cap on, {cap} raw bricks -> wares={be.CountWares()}");
+            Assert.Equal(cap, be.CountWares());
+            Assert.Null(be.FirstOverfullOnGrate());
+        }
+        finally
+        {
+            Cfg.RespectMaxFireable = false;
+        }
+    }
+
+    /// <summary>A firing costs what the config says it costs, in whole fuel items.</summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task AFiringCostsThirtyFirewood()
+    {
+        Assert.Equal(60f, Cfg.FiringEnergyHours);
+
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 12);
+        Fuel("game:firewood", 30);                 // 30 x (24 burnDuration / 12) = 60 fuel-hours
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        for (int i = 0; i < 10 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        Log($"30 firewood -> lit={be.Lit} batchFired={be.BatchFired} fuel left={be.FuelItemCount()}");
+        Assert.True(!be.Lit, "30 firewood should be exactly enough to see the batch out");
+        Assert.True(be.BatchFired, "and the batch should have fired");
+    }
+
+    /// <summary>
+    /// The beehive kiln has no lime recipe of its own either, and its gate takes the same kind
+    /// of attribute. Tagging is all it needs - no Harmony patch, and nothing taken away from
+    /// vanilla, which is the difference between this and how BulkQuicklime does it.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task LimeIsTaggedForTheBeehiveKilnToo()
+    {
+        var lime = Sapi.World.GetItem(new AssetLocation("game:lime"));
+        var tag = lime.Attributes?["beehivekiln"];
+        Assert.NotNull(lime);
+
+        Log($"FireLimeInBeehiveKiln={Cfg.FireLimeInBeehiveKiln} (default), tag exists={tag?.Exists}");
+        Assert.True(!Cfg.FireLimeInBeehiveKiln, "off by default - it changes a vanilla block");
+        Assert.True(tag?.Exists != true, "so vanilla's kiln should see nothing");
+
+        try
+        {
+            Cfg.FireLimeInBeehiveKiln = true;
+            FornaxModSystem.ApplyLimeTags(Sapi);
+
+            tag = lime.Attributes?["beehivekiln"];
+            Assert.True(tag?.Exists == true, "vanilla's kiln gates on this attribute alone");
+
+            // all four door counts, because quicklime is quicklime however much air reached it
+            for (int open = 0; open <= 3; open++)
+            {
+                Assert.Equal("quicklime", tag[open.ToString()]["code"].AsString(),
+                    $"door count {open} should still give quicklime");
+            }
+        }
+        finally
+        {
+            Cfg.FireLimeInBeehiveKiln = false;
+            FornaxModSystem.ApplyLimeTags(Sapi);
+        }
+
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// Kiln shelves are off by default, and "off" has to mean the headspace course is not read
+    /// at all - not merely that shelves are unrecognised. Ground storage put up there stands in
+    /// for a shelf, so this holds without the Stackable Kiln Shelves mod installed.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task TheHeadspaceCourseIsOnlyFiredWhenContainersAreEnabled()
+    {
+        Assert.True(!Cfg.FireContainersInChamber, "containers in the chamber should be off by default");
+
+        BuildKiln();
+
+        // one pile on the grate, one in the headspace above it
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        BlockPos above = Ware(0, 0).UpCopy();
+        World.SetBlock("game:groundstorage", above);
+        var upper = World.BE<BlockEntityGroundStorage>(above);
+        upper.Inventory[0].Itemstack = World.Stack("game:rawbrick-blue", 8);
+        upper.Inventory[0].MarkDirty();
+        upper.MarkDirty(true);
+
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Log($"default: wares counted = {be.CountWares()}");
+        Assert.Equal(8, be.CountWares(), "only the grate course should be read by default");
+
+        try
+        {
+            Cfg.FireContainersInChamber = true;
+            await Tick3s();
+
+            Log($"containers enabled: wares counted = {be.CountWares()}");
+            Assert.Equal(16, be.CountWares(), "with containers on, the headspace counts too");
+
+            Fuel("game:firewood", 32);
+            await Tick3s();
+            be.TryIgnite(null);
+            for (int i = 0; i < 8 && be.Lit; i++)
+            {
+                await Hours(3);
+                await Tick3s();
+            }
+
+            var lower = World.BE<BlockEntityGroundStorage>(Ware(0, 0)).Inventory[0].Itemstack;
+            var higher = World.BE<BlockEntityGroundStorage>(above).Inventory[0].Itemstack;
+            Log($"after firing: grate={lower?.Collectible?.Code}, headspace={higher?.Collectible?.Code}");
+
+            Assert.Equal("game:burnedbrick-gray", lower.Collectible.Code.ToString());
+            Assert.Equal("game:burnedbrick-gray", higher.Collectible.Code.ToString(),
+                "the headspace course should have fired as well");
+        }
+        finally
+        {
+            Cfg.FireContainersInChamber = false;
+        }
+    }
+
+    /// <summary>A stand-in for what Stackable Kiln Shelves' block entity actually is.</summary>
+    private class ShelfLikeStorage : BlockEntityGroundStorage { }
+
+    /// <summary>
+    /// The switch above is only worth anything if a shelf can be told apart from a pile, and the
+    /// obvious test cannot do it: BlockEntityKilnShelf derives from BlockEntityGroundStorage, so
+    /// "is BlockEntityGroundStorage" says true and the kiln fires two courses of shelving with
+    /// the config switched off. Exact type, not "is". Verified against the real mod by hand; this
+    /// keeps it honest without needing the mod installed.
+    /// </summary>
+    [VsTest]
+    public async Task ASubclassOfGroundStorageIsNotPlainGroundStorage()
+    {
+        var plain = new BlockEntityGroundStorage();
+        var shelfLike = new ShelfLikeStorage();
+
+        Assert.True(shelfLike is BlockEntityGroundStorage, "the trap: an is-test cannot tell them apart");
+
+        Assert.True(BlockEntityUpdraftFirebox.IsPlainGroundStorage(plain));
+        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(shelfLike),
+            "a subclass is a mod doing more than a heap on the floor, and the config decides about it");
+        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(null));
+
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// The lime tags follow the config in both directions, so a setting changed in a running
+    /// world takes hold without a reload - both kilns read these attributes live. One-way
+    /// tagging would make the config switches lies until the next restart.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task LimeTagsFollowTheConfigBothWays()
+    {
+        var lime = Sapi.World.GetItem(new AssetLocation("game:lime"));
+        Assert.NotNull(lime);
+
+        try
+        {
+            Cfg.FireLime = false;
+            Cfg.FireLimeInBeehiveKiln = false;
+            FornaxModSystem.ApplyLimeTags(Sapi);
+
+            Log($"both off -> fornaxkiln={lime.Attributes?["fornaxkiln"].Exists}, " +
+                $"beehivekiln={lime.Attributes?["beehivekiln"].Exists}");
+            Assert.True(lime.Attributes?["fornaxkiln"].Exists != true, "the tag should have been taken off again");
+            Assert.True(lime.Attributes?["beehivekiln"].Exists != true);
+
+            // and the kiln stops taking lime as a ware, live
+            BuildKiln();
+            LoadWare(0, 0, "game:lime", 12);
+            await Ticks(2);
+            await Tick3s();
+
+            Log($"both off -> wares={Be().CountWares()}, unfireable={Be().FirstUnfireableOnGrate()}");
+            Assert.Equal(0, Be().CountWares(), "untagged lime is not a ware");
+            Assert.NotNull(Be().FirstUnfireableOnGrate(), "and the kiln should say so");
+
+            Cfg.FireLime = true;
+            Cfg.FireLimeInBeehiveKiln = false;   // the default; leaving it on would leak into other tests
+            FornaxModSystem.ApplyLimeTags(Sapi);
+            await Tick3s();
+
+            Log($"both on -> wares={Be().CountWares()}");
+            Assert.Equal(12, Be().CountWares(), "tagging again should take hold without a reload");
+        }
+        finally
+        {
+            Cfg.FireLime = true;
+            Cfg.FireLimeInBeehiveKiln = false;   // the default; leaving it on would leak into other tests
+            FornaxModSystem.ApplyLimeTags(Sapi);
+        }
+    }
+
+    /// <summary>
+    /// The two lime switches have to be independent, and one specific combination says whether
+    /// they are: lime off here, on for the beehive kiln. The kiln honours a beehivekiln tag as
+    /// an opt-in, so without care the tag this mod writes for the OTHER kiln reads back as
+    /// permission for this one and quietly undoes FireLime=false. Found by running the config
+    /// permutations rather than by reading the code.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task TaggingLimeForTheBeehiveKilnDoesNotFireItHere()
+    {
+        try
+        {
+            Cfg.FireLime = false;
+            Cfg.FireLimeInBeehiveKiln = true;
+            FornaxModSystem.ApplyLimeTags(Sapi);
+
+            var lime = Sapi.World.GetItem(new AssetLocation("game:lime"));
+            Log($"fornaxkiln={lime.Attributes?["fornaxkiln"].Exists} " +
+                $"beehivekiln={lime.Attributes?["beehivekiln"].Exists}");
+
+            Assert.True(lime.Attributes?["fornaxkiln"].Exists != true, "this kiln's own tag should be off");
+            Assert.True(lime.Attributes?["beehivekiln"].Exists == true, "the other kiln's should be on");
+
+            BuildKiln();
+            LoadWare(0, 0, "game:lime", 12);
+            await Ticks(2);
+            await Tick3s();
+
+            Log($"wares={Be().CountWares()}, unfireable={Be().FirstUnfireableOnGrate() ?? "(none)"}");
+            Assert.Equal(0, Be().CountWares(),
+                "FireLime=false must hold even while lime is tagged for the beehive kiln");
+            Assert.NotNull(Be().FirstUnfireableOnGrate());
+
+            // and a beehivekiln tag somebody else wrote still opts a ware in, which is the
+            // whole point of honouring it
+            Assert.True(!FornaxModSystem.OurBeehiveTags.Contains(new AssetLocation("game:rawbrick-blue")));
+        }
+        finally
+        {
+            Cfg.FireLime = true;
+            Cfg.FireLimeInBeehiveKiln = false;   // the default; leaving it on would leak into other tests
+            FornaxModSystem.ApplyLimeTags(Sapi);
+        }
+    }
+
+    /// <summary>
+    /// ConfigLib is reached by reflection so it stays optional at build time as well as at run
+    /// time - which means a signature change upstream would otherwise fail silently, leaving the
+    /// settings out of the GUI and unsynced from the server with nothing to notice it by. This is
+    /// what notices. Skips when ConfigLib is not installed, which is the ordinary case.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ConfigLibTakesTheConfigWhenItIsInstalled()
+    {
+        if (!Sapi.ModLoader.IsModEnabled("configlib"))
+        {
+            Log("configlib is not installed - nothing to bind against, skipping");
+            await Ticks(1);
+            return;
+        }
+
+        Log($"configlib present, bound = {FornaxModSystem.ConfigLibBound}");
+        Assert.True(FornaxModSystem.ConfigLibBound,
+            "configlib is installed but did not take the config - the reflection binding has drifted");
+
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// The beehivekiln tag is read only when combustibleProps has nothing to say. Honouring it
+    /// whenever it exists would be the truer simulation - a sealed chamber is a reducing firing,
+    /// key "0" - but it would hand this kiln the tans and creams that are a beehive kiln's to
+    /// give. Blue raw brick has both, and must still fire to what it has always fired to.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task TheBeehiveTagDoesNotOverrideAWaresOwnResult()
+    {
+        var brick = Sapi.World.GetItem(new AssetLocation("game:rawbrick-blue"));
+        var beehive = brick.Attributes?["beehivekiln"];
+
+        Assert.True(beehive?.Exists == true, "vanilla blue raw brick should carry the beehivekiln tag");
+        Log($"beehivekiln[0] = {beehive["0"]?["code"]?.AsString()}, " +
+            $"combustibleProps = {brick.CombustibleProps?.SmeltedStack?.Code}");
+
+        // the two disagree, which is what makes this worth asserting at all
+        Assert.Equal("burnedbrick-cream", beehive["0"]["code"].AsString());
+        Assert.Equal("burnedbrick-gray", brick.CombustibleProps.SmeltedStack.Code.Path);
+
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 8);
+        Fuel("game:firewood", 32);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        for (int i = 0; i < 8 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s();
+        }
+
+        var got = World.BE<BlockEntityGroundStorage>(Ware(0, 0)).Inventory[0].Itemstack;
+        Log($"8 blue raw brick -> {got?.StackSize}x {got?.Collectible?.Code}");
+        Assert.Equal("game:burnedbrick-gray", got.Collectible.Code.ToString(),
+            "combustibleProps wins; the beehive tag is a fallback, not an override");
     }
 
     [VsTest(TimeoutMs = 120000)]
@@ -516,7 +1128,7 @@ public class FornaxTests
         World.SetBlock("game:soil-medium-normal", grassy);
         World.SetBlock(Wall, laid);
 
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -555,7 +1167,7 @@ public class FornaxTests
     {
         BuildKiln();
         LoadWare(0, 0, "game:rawbrick-blue", 8);
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -593,7 +1205,7 @@ public class FornaxTests
     {
         BuildKiln();
         LoadWare(0, 0, "game:rawbrick-blue", 8);
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -649,7 +1261,7 @@ public class FornaxTests
     {
         BuildKiln();
         LoadWare(0, 0, "game:rawbrick-blue", 8);
-        Fuel("game:firewood", 4);          // ~5h of burn against a 20 fuel-hour batch
+        Fuel("game:firewood", 4);          // 8 fuel-hours against a 60 fuel-hour batch
         await Ticks(2);
         await Tick3s();
 
@@ -678,7 +1290,7 @@ public class FornaxTests
         Assert.Greater(be.ChamberTemperature, (float)Cfg.AmbientTemperature);
 
         double banked = be.FiredEnergyHours;
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Tick3s();
 
         Assert.True(be.CanIgnite, "a re-fuelled kiln should light without breaking the seals");
@@ -748,7 +1360,7 @@ public class FornaxTests
     public async Task BreakingALitFireboxStopsTheVentSmoking()
     {
         BuildKiln();
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -838,7 +1450,7 @@ public class FornaxTests
     public async Task FuelIsConsumedAsItBurns()
     {
         BuildKiln();
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -981,7 +1593,7 @@ public class FornaxTests
     {
         BuildKiln();
         LoadWare(0, 0, "game:rawbrick-blue", 8);
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Player.StandNear(Fb().AddCopy(0, 0, 3));
         await Ticks(2);
         await Tick3s();
@@ -1208,9 +1820,15 @@ public class FornaxTests
         Assert.Equal(Firebox, World.BlockCode(Fb()));
         Assert.Equal(0, (int)World.GetBlock(Fb()).LightHsv[2]);
 
+        // Two full slots, well past the 60 fuel-hours a batch needs. The test steps time in
+        // three-hour jumps and the kiln draws a whole step's worth at once, so a batch that
+        // finishes mid-step swallows whatever is left - fund it generously or the "ready"
+        // check below turns into a check on the step size.
         var be = Be();
-        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
+        be.Inventory[1].Itemstack = World.Stack("game:firewood", 32);
         be.Inventory[0].MarkDirty();
+        be.Inventory[1].MarkDirty();
         be.TryIgnite(null);
         await Ticks(4);
 
@@ -1236,8 +1854,7 @@ public class FornaxTests
         Assert.True(!Be().Lit);
         Assert.Equal("fornax:kilnvent-idle", World.BlockCode(ventPos));
 
-        // 16 firewood is 32 fuel-hours against a 20 fuel-hour batch, so fuel is left over
-        // and it settles on "ready" rather than "cold"
+        // fuel is left over, so it settles on "ready" rather than "cold"
         Log("after the firing: " + World.BlockCode(Fb()) + ", fuel left=" + Be().FuelItemCount());
         Assert.Equal("fornax:kilnfirebox-ready-south", World.BlockCode(Fb()));
         Assert.Equal(0, (int)World.GetBlock(Fb()).LightHsv[2]);
@@ -1258,9 +1875,15 @@ public class FornaxTests
         await Ticks(2);
         await Tick3s();
 
+        // Two full slots, well past the 60 fuel-hours a batch needs. The test steps time in
+        // three-hour jumps and the kiln draws a whole step's worth at once, so a batch that
+        // finishes mid-step swallows whatever is left - fund it generously or the "ready"
+        // check below turns into a check on the step size.
         var be = Be();
-        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
+        be.Inventory[1].Itemstack = World.Stack("game:firewood", 32);
         be.Inventory[0].MarkDirty();
+        be.Inventory[1].MarkDirty();
         be.TryIgnite(null);
         await Ticks(4);
 
@@ -1337,9 +1960,15 @@ public class FornaxTests
         await Ticks(2);
         await Tick3s();
 
+        // Two full slots, well past the 60 fuel-hours a batch needs. The test steps time in
+        // three-hour jumps and the kiln draws a whole step's worth at once, so a batch that
+        // finishes mid-step swallows whatever is left - fund it generously or the "ready"
+        // check below turns into a check on the step size.
         var be = Be();
-        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
+        be.Inventory[1].Itemstack = World.Stack("game:firewood", 32);
         be.Inventory[0].MarkDirty();
+        be.Inventory[1].MarkDirty();
         be.TryIgnite(null);
         await Ticks(2);
 
@@ -1434,7 +2063,7 @@ public class FornaxTests
         Log("2 firewood -> " + dsc.ToString().Replace("\n", " | ").Trim());
         Assert.Contains(dsc.ToString(), "%");
 
-        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
         be.Inventory[0].MarkDirty();
         dsc.Clear();
         be.GetBlockInfo(Player.Me, dsc);
@@ -1485,9 +2114,9 @@ public class FornaxTests
         Assert.Equal(6, byName["fornax:kilnseal-intact"]);
         Assert.Equal(1, byName["fornax:kilnvent-idle"]);
 
-        // Of the 134 structure positions: the firebox is already right, and the 42 air and
-        // 9 ware positions are already air, so what is ghosted is exactly what you must
-        // build - 66 walls + 9 grate tiles + 6 mud seals + 1 vent.
+        // Of the 110 structure positions: the firebox is already right and the 27 chamber
+        // positions are already clear, so what is ghosted is exactly what you must build -
+        // 66 walls + 9 grate tiles + 6 mud seals + 1 vent.
         Assert.Equal(missing.Count, colors.Count);
         Assert.Equal(66 + 9 + 6 + 1, missing.Count);
 
@@ -1597,7 +2226,7 @@ public class FornaxTests
     {
         BuildKiln();
         LoadWare(0, 0, "game:rawbrick-blue", 16);
-        Fuel("game:firewood", 16);
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -1619,8 +2248,8 @@ public class FornaxTests
     public async Task BreachingAHotKilnShattersSomeWares()
     {
         BuildKiln();
-        LoadWare(0, 0, "game:rawbrick-blue", 64);
-        Fuel("game:firewood", 16);
+        LoadWare(0, 0, "game:rawbrick-blue", 24);   // a full pile; the maxFireable cap is off by default
+        Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
@@ -1638,8 +2267,8 @@ public class FornaxTests
         var gs = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
         int left = gs.Inventory[0].Itemstack?.StackSize ?? 0;
 
-        Log($"64 raw bricks -> {left} survived a breach at {be.ChamberTemperature:0}C");
-        Assert.Less(left, 64);
+        Log($"24 raw bricks -> {left} survived a breach at {be.ChamberTemperature:0}C");
+        Assert.Less(left, 24);
         Assert.Greater(left, 0);
         Assert.True(!be.StructureComplete, "a breached kiln should be paused");
     }
@@ -1859,7 +2488,7 @@ public class FornaxVisualTests
         FornaxTests.Build(f);
 
         var be = World.BE<BlockEntityUpdraftFirebox>(f);
-        be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
         be.Inventory[0].MarkDirty();
 
         await Ticks(4);
@@ -1918,7 +2547,7 @@ public class FornaxVisualTests
             if (i == 6)
             {
                 var be = World.BE<BlockEntityUpdraftFirebox>(f);
-                be.Inventory[0].Itemstack = World.Stack("game:firewood", 16);
+                be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
                 be.Inventory[0].MarkDirty();
                 await Tick3s(f);
                 be.TryIgnite(null);

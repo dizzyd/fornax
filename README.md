@@ -10,10 +10,20 @@ in the Copper and Bronze Age.
 |                  | pit kiln   | **updraft kiln** | beehive kiln |
 |------------------|------------|------------------|--------------|
 | wares per firing | 4          | **~36**          | ~108         |
-| fuel per firing  | 8 firewood | **10 firewood**  | 9 coal piles |
-| fuel per ware    | 2.0        | **0.28**         | —            |
+| fuel per firing  | 4 firewood | **30 firewood**  | up to 144 coal |
+| fuel per ware    | 1.0        | **0.83**         | ~1.3         |
 | firing time      | 20 h       | **8–13 h**       | 9 h          |
 | iron required    | no         | **no**           | yes (door)   |
+
+The pit kiln figure is its four `fuel` build stages at one firewood each, plus 10 drygrass and
+8 sticks it also eats; a beehive kiln's is nine coal piles at `BlockEntityCoalPile.MaxStackSize`
+16. The point of this kiln is **batch size without iron**, not fuel efficiency — per ware it is
+only slightly better than a pit kiln, and it fires 36 at a time instead of 4. Every firing also
+cracks six mud seals, 24 clay and 6 soil, which no fuel table shows.
+
+Raw brick is the one ware that stays well ahead: a full pile is 24 and there are nine of them,
+so 216 a firing at 0.14 firewood each against a pit kiln's 0.33. Vanilla's own `maxFireable`
+would halve that, and `RespectMaxFireable` turns it on for anyone who wants it.
 
 ## Building one
 
@@ -39,8 +49,75 @@ The drum's four corners stop at grate level: the two courses above them are left
 shell reads as an octagon narrowing into the corbelled neck. The middle three blocks of the
 front wall at y=2 and y=3 are the mud seal.
 
+That silhouette is the shape the kiln is *meant* to have, not a rule it enforces. The corner
+notches and the ring around the neck sit outside the sealed chamber, so the structure check
+ignores them entirely — fill them in, lean something against them, hang a tool rack there.
+The nine chamber positions above the grate are checked, but only for being *clear*: anything
+that is not a solid cube is allowed to sit in there, which is what keeps the kiln working
+with whatever a mod invents to hold wares. See `IsChamberClear`.
+
 Shopping list: **66 mud brick or cob**, **9 kiln grate tiles**, **6 mud seals**, **1 firebox**,
 **1 draft vent**.
+
+## What it fires
+
+Anything vanilla's beehive kiln would take: `smeltingType: fire`, or a ware whose product is a
+ceramic block, or anything carrying a `beehivekiln` attribute — that last clause is the
+ecosystem's own opt-in, and honouring it is what lets a mod add a ware without patching
+anything here. A `fornaxkiln` attribute does the same thing aimed at this kiln, and wins over
+`beehivekiln` where both are present.
+
+What a ware turns into is resolved in this order: `fornaxkiln` first, since that is a statement
+about *this* kiln and whoever set it meant it; then `combustibleProps.smeltedStack`; and
+`beehivekiln` last, only as a fallback for a ware that has nothing else.
+
+That last ordering is deliberate and not the obvious one. `beehivekiln` is keyed `0`–`3` by how
+many of that kiln's doors stand open, because that is what decides how much air reaches the
+wares, and key `0` is the fully reducing firing that a mud-sealed chamber physically is. Taking
+it whenever it exists would be the truer simulation — but it would also hand this kiln the tans
+and creams that are a beehive kiln's to give, and a red raw brick would fire to tan here rather
+than red. Reading it only when `combustibleProps` is silent leaves every existing ware firing to
+exactly what it fired to before, and still lets a tag-only ware convert rather than sit on the
+grate forever.
+
+### Lime
+
+Crushed lime is ground-storable in vanilla and already knows what it becomes — quicklime, two to
+one, at 825 °C. It fails both `combustibleProps` clauses only because its `smeltingType` is
+`cook` and quicklime is an item rather than a ceramic block. `FornaxModSystem.TagLime` adds the
+opt-in attribute; the conversion still comes from vanilla's own numbers. Lime is `Messy12`, so it
+stores 12 to a block: a full grate is 108 lime, giving 54 quicklime a firing.
+
+Tagging happens in `AssetsFinalize` rather than as a JSON patch because patches are applied while
+assets load, before anything can read a config — and a switch that cannot reach the thing it
+names is not a switch.
+
+### Config
+
+| setting | default | |
+|---|---|---|
+| `FireLime` | `true` | lime fires into quicklime on the grate |
+| `FireLimeInBeehiveKiln` | `true` | tags lime for the **vanilla** beehive kiln too, which has no lime recipe of its own. Adds an attribute rather than taking anything away, so it needs no Harmony patch — but note this reaches outside the mod and changes a vanilla block's behaviour |
+| `FireContainersInChamber` | `false` | read wares out of any container in the chamber, and out of the headspace course as well as the grate. This is what makes Stackable Kiln Shelves work, and it is off because shelves are a capacity multiplier this kiln is not costed for |
+| `RespectMaxFireable` | `false` | cap each pile at the ware's own vanilla `maxFireable`, as a pit kiln does — raw brick 12 rather than a full pile of 24. Off because tripling the fuel cost was the correction the kiln needed; this is the tighter version for anyone who wants it |
+
+`FireContainersInChamber` turns on the **exact-type** check in `IsPlainGroundStorage`, and that
+subtlety is the whole reason the switch works: `BlockEntityKilnShelf` *derives from*
+`BlockEntityGroundStorage`, so `be is BlockEntityGroundStorage` reads a shelf as an ordinary pile
+and fires two courses of shelving no matter what the config says. Compare types exactly.
+
+### BulkQuicklime takes the lime away
+
+BulkQuicklime patches `remove /behaviors/0` onto vanilla lime, which is exactly its
+`GroundStorable`, and replaces it with a `limepile` block cooked by a Harmony patch on
+`BlockEntityBeeHiveKiln`. With that mod installed there is no way to get lime onto this kiln's
+grate at all, and the pile it substitutes will never fire here. The two features are mutually
+exclusive; nothing on this side can reconcile them, so the kiln simply says it cannot fire the
+pile. `LimeFiresIntoQuicklime` detects this and skips rather than failing.
+
+Note the kiln does **not** check `meltingPoint`. Nothing it fires today melts above the chamber
+temperature, so it has never mattered, but a tag on something that needs more heat than the kiln
+reaches would fire anyway.
 
 Grate tiles are clay-formed and then pit-fired, so you must use the old technology once to build
 the new one. The clay-forming pattern is the grate itself — a frame with two cross bars —
