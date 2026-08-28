@@ -284,4 +284,72 @@ public class ModDbShots
         await HideHud();
         Log("06 -> " + await Shot.Take(Out("06-firing-at-night.png")));
     }
+
+    /// <summary>
+    /// The mod icon: one kiln, lit, filling a square frame.
+    ///
+    /// Shot square at 1000x1000 and scaled down to the required 480, rather than cropped out of
+    /// a 16:9 frame - a crop of the default 960x600 window can only give 600 pixels of subject,
+    /// and the icon is looked at small enough that the softness shows.
+    ///
+    /// Framed from the corner, close, at the height of the wares: an icon is read at 100 pixels,
+    /// so it needs the two things that say what this is - the drum's silhouette narrowing into
+    /// the neck, and the mouth glowing - and nothing else. Late afternoon rather than the night
+    /// shot's dusk, because a thumbnail that is mostly dark reads as a dark rectangle.
+    /// </summary>
+    [VsTest(TimeoutMs = 300000)]
+    [RequiresClient]
+    [PlotSize(48, 32)]
+    public async Task Shot07_ModIcon()
+        => await IconShot("modicon", P(21, 3, 25), P(24, 3, 18), 15);
+
+    /// <summary>
+    /// One lit kiln, framed square for the icon, and the source of fornax/modicon.png - shot at
+    /// 1000x1000 and scaled down to the required 480 rather than cropped out of a 16:9 frame,
+    /// since a crop of the default 960x600 window can only give 600 pixels of subject.
+    ///
+    /// Framed from the corner at the height of the wares. An icon is read at about a hundred
+    /// pixels, so it needs the two things that say what this is - the drum's silhouette
+    /// narrowing into the neck, and the mouth glowing - and nothing else. Mid-afternoon rather
+    /// than the night shot's dusk: a thumbnail that is mostly dark reads as a dark rectangle.
+    ///
+    /// Each framing gets its own test rather than sharing a scene. A second teleport within one
+    /// test lands the camera somewhere it has no business being, and the frame comes back as the
+    /// inside of a block.
+    ///
+    /// The window is square because the slot's own copy of templates/clientsettings.json says
+    /// so - 1000x1000, particles and shadows on, ssaa 2. sync-linux.sh replaces that file, so it
+    /// is set again before each run rather than kept.
+    /// </summary>
+    private async Task IconShot(string name, BlockPos from, BlockPos at, int hour)
+    {
+        BlockPos f = P(24, 1, 20);
+        await World.SetCalendarTo(500 * 24 + hour);
+        ClearAround(f);
+        Build(f);
+        LoadWares(f);
+        await Ticks(10);
+        await Light(f);
+        await Ticks(300);                               // up to temperature, plume established
+
+        await Aim(from, at);
+        await HideHud();
+        await HideGuis();
+        Log($"{name} -> " + await Shot.Take(Out($"{name}.png")));
+    }
+
+    /// <summary>
+    /// F4 mode, which takes the crosshair with it - HideHud closes dialogs and the crosshair is
+    /// not one. The hotkey toggles, and session state outlives a test, so a second shot in the
+    /// same session turns the HUD back on unless this checks first.
+    /// </summary>
+    private static async Task HideGuis()
+    {
+        await OnClient();
+        bool hidden = Vs.Capi.HideGuis;
+        await OnServer();
+
+        if (!hidden) await Input.Hotkey("togglehud");
+        await Frames.Wait(20);
+    }
 }
