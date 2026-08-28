@@ -6,6 +6,7 @@
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version. See COPYING.LESSER, or <https://www.gnu.org/licenses/>.
 
+using System.Linq;
 using System.Threading.Tasks;
 using Fornax;
 using Vintagestory.API.Common;
@@ -276,6 +277,116 @@ public class CompatTests
             "configlib is installed but did not take the config - the reflection binding has drifted");
 
         await Ticks(1);
+    }
+
+    // ------------------------------------------------------------------
+    //  XSkills
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The original mod and the maintained fork ship under different modids while sharing every
+    /// type name, so neither one on its own is the question worth asking.
+    /// </summary>
+    private static bool NeedsXSkills()
+    {
+        if (Sapi.ModLoader.IsModEnabled("xskills") || Sapi.ModLoader.IsModEnabled("xskillsfork")) return true;
+
+        Log("xskills is not installed - skipping. Run scripts/test-matrix.sh to exercise this.");
+        return false;
+    }
+
+    /// <summary>
+    /// A player's pottery experience, read the same way the kiln writes it: by reflection, so the
+    /// test assembly needs XSkills at build time no more than the mod does. "SkillSet" is
+    /// PlayerSkillSet.PropertyName(), which is what an entity behaviour is looked up by.
+    /// </summary>
+    private static float PotteryExperience(IPlayer player)
+    {
+        var skillSet = player.Entity.GetBehavior("SkillSet");
+        Assert.NotNull(skillSet, "xskills is installed but the player has no SkillSet behaviour");
+
+        var find = skillSet.GetType().GetMethod("FindSkill", new[] { typeof(string), typeof(bool) });
+        Assert.NotNull(find, "PlayerSkillSet.FindSkill(string, bool) has moved");
+
+        var skill = find.Invoke(skillSet, new object[] { "pottery", false });
+        Assert.NotNull(skill, "xskills is installed but has no pottery skill");
+
+        return (float)skill.GetType().GetProperty("Experience").GetValue(skill);
+    }
+
+    /// <summary>
+    /// A firing counts towards the Pottery skill, for whoever lit the kiln, at the rate the
+    /// config asks for.
+    ///
+    /// Two things could go wrong here and only one of them is loud. XSkills.PotteryUtil
+    /// .ApplyOnStack is reached by name, so a rename upstream costs the whole feature silently -
+    /// that is what asserting on Bound is for, as with ConfigLib above. The other is the
+    /// calibration, which is arithmetic against a *different* kiln's behaviour and cannot be
+    /// checked by reading this mod's code at all: XSkills awards a beehive kiln n squared
+    /// experience for a pile of n occupied slots, because it patches a method vanilla calls once
+    /// per slot and then loops the whole pile. So the numbers are pinned here.
+    ///
+    /// One pile, four occupied slots, at the default 0.75 of a beehive kiln:
+    ///
+    ///     0.75 x (27 / 9) x 4 peers x 4 slots = 36
+    ///
+    /// The kiln lit by nobody - TryIgnite(null), which every other firing test in the suite uses
+    /// - is covered by running that suite with xskills installed, mod set D in test-matrix.sh.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    public async Task AFiringCountsTowardsXSkillsPottery()
+    {
+        if (!NeedsXSkills()) return;
+
+        Log($"xskills present, bound = {XSkillsPottery.Bound}");
+        Assert.True(XSkillsPottery.Bound,
+            "xskills is installed but the pottery hook did not resolve - the reflection binding has drifted");
+
+        var player = Sapi.World.AllOnlinePlayers.FirstOrDefault();
+        Assert.NotNull(player, "this one needs a real player to credit");
+
+        var cfg = FornaxModSystem.Config;
+        Assert.True(cfg.GrantXSkillsExperience, "the switch is on by default and this test reads its rate");
+
+        float before = PotteryExperience(player);
+
+        FornaxTests.Build(Fb());
+        World.SetBlock("game:groundstorage", Ware(0, 0));
+        await Ticks(2);
+
+        var storage = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        for (int i = 0; i < 4; i++)
+        {
+            storage.Inventory[i].Itemstack = World.Stack("game:rawbrick-blue", 2);
+            storage.Inventory[i].MarkDirty();
+        }
+        storage.MarkDirty(true);
+
+        var be = Be();
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
+        be.Inventory[0].MarkDirty();
+        await Tick3s();
+
+        Assert.Equal(8, be.CountWares(), "four slots of two, all of them part of the batch");
+        Assert.True(be.CanIgnite, "a complete, fuelled kiln should be ignitable");
+        be.TryIgnite(player.Entity);
+
+        for (int i = 0; i < 10 && be.Lit; i++) { await Hours(3); await Tick3s(); }
+        Assert.True(be.BatchFired, "the batch should have fired before anything is claimed about it");
+
+        // What the same four-slot pile would have been worth in a beehive kiln: one experience
+        // per slot per conversion, and every slot converts.
+        const int inABeehiveKiln = 4 * 4;
+        int expected = (int)(cfg.XSkillsExperienceVsBeehiveKiln * 27 / 9 * inABeehiveKiln);
+
+        float after = PotteryExperience(player);
+        Log($"pottery experience {before} -> {after} for a firing lit by {player.PlayerName}; " +
+            $"a beehive kiln would have paid {inABeehiveKiln} for this pile, " +
+            $"and {cfg.XSkillsExperienceVsBeehiveKiln} of it across three times the positions is {expected}");
+
+        Assert.Equal((float)expected, after - before,
+            "a firing should be worth its configured fraction of a beehive kiln's, scaled by capacity");
     }
 
     // ------------------------------------------------------------------

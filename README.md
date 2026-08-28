@@ -100,6 +100,8 @@ names is not a switch.
 | `FireLimeInBeehiveKiln` | `false` | tags lime for the **vanilla** beehive kiln too, which has no lime recipe of its own. Adds an attribute rather than taking anything away, so it needs no Harmony patch. Off because vanilla draws a clean line — `fire` wares go in a kiln, everything else including `cook` goes in a firepit — and bending that inside this mod is one thing, bending it inside a vanilla block for everyone who installs the mod is another |
 | `FireContainersInChamber` | `false` | read wares out of any container in the chamber, and out of the headspace course as well as the grate. This is what makes Stackable Kiln Shelves work, and it is off because shelves are a capacity multiplier this kiln is not costed for |
 | `RespectMaxFireable` | `false` | cap each pile at the ware's own vanilla `maxFireable`, as a pit kiln does — raw brick 12 rather than a full pile of 24. Off because tripling the fuel cost was the correction the kiln needed; this is the tighter version for anyone who wants it |
+| `GrantXSkillsExperience` | `true` | credit a firing to whoever lit the kiln, in XSkills' Pottery skill. Does nothing when XSkills is absent |
+| `XSkillsExperienceVsBeehiveKiln` | `0.75` | what a full firing here earns in that skill, against a full beehive kiln firing |
 
 `FireContainersInChamber` turns on the **exact-type** check in `IsPlainGroundStorage`, and that
 subtlety is the whole reason the switch works: `BlockEntityKilnShelf` *derives from*
@@ -133,6 +135,46 @@ BulkQuicklime patches `remove /behaviors/0` onto vanilla lime, which is exactly 
 grate at all, and the pile it substitutes will never fire here. The two features are mutually
 exclusive; nothing on this side can reconcile them, so the kiln simply says it cannot fire the
 pile. `LimeFiresIntoQuicklime` detects this and skips rather than failing.
+
+### XSkills counts a firing here
+
+XSkills gets its Pottery experience out of the vanilla kilns by Harmony-patching them, which
+reaches this kiln not at all — so without help, a potter who builds the better kiln stops
+levelling, which is a straight penalty for installing the mod. Everything the patched kilns do to
+a finished ware is one public static call, `XSkills.PotteryUtil.ApplyOnStack`, and this kiln makes
+the same call per fired slot: the experience, the *Pottery Timer* message and the *Inspiration*
+variant swap are then whatever that skill says they are rather than a second opinion that drifts.
+
+A full firing here is worth **75%** of what the same loading earns in a beehive kiln
+(`XSkillsExperienceVsBeehiveKiln`). That is the rate this kiln should pay: it holds a third of a
+beehive kiln's wares in a third of the positions, but needs no iron and no coal, so a potter
+working through the Bronze Age is not left levelling on pit kilns — while the beehive still keeps
+a clear lead per firing.
+
+Matching that fraction across every way of loading the chamber takes XSkills' own arithmetic
+rather than a guess at it, and the shape of it is not obvious. XSkills patches
+`ConvertItemToBurned`, which vanilla calls **once per slot** as that slot finishes, and the patch
+then awards one experience for **every non-empty slot in the pile**. A pile of `n` occupied slots
+is therefore worth `n²`, not `n`: 16 from a quadruple-stacked pile, 1 from a single stack. So this
+kiln pays `share × peers` per fired slot, where `peers` is how many slots fired in the same pile —
+the same curve, scaled by the two kilns' capacities:
+
+| | beehive (27 positions) | fornax (9 positions) |
+|---|---|---|
+| full of single-stack piles | 27 | 20 |
+| full of quadruple-stacked piles | 432 | 324 |
+
+XSkills awards a whole experience per call and takes no amount, so the fractional part is carried
+across the batch and spent when it comes to one whole. The credit goes to whoever struck the
+firestarter, which this kiln knows and neither vanilla kiln does (XSkills has to stamp an owner on
+whoever last touched those). If they have logged out by the time it finishes, nobody is credited.
+
+Bound by reflection, like ConfigLib, so XSkills is optional at build time as well as at run time.
+It is found by its ModSystem type name rather than its modid, because the original
+([`xskills`](https://mods.vintagestory.at/xskills), Xandu) and the maintained fork
+([`xskillsfork`](https://mods.vintagestory.at/show/mod/44074), El_Neuman) differ in the latter and
+not the former. `AFiringCountsTowardsXSkillsPottery` is what notices when the call is renamed
+upstream, since reflection that stops resolving is otherwise silent.
 
 
 Grate tiles are clay-formed and then pit-fired, so you must use the old technology once to build

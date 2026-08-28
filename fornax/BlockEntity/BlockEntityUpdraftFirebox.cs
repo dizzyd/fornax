@@ -71,6 +71,21 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     public float ChamberTemperature;
     private double totalHoursLastUpdate;
 
+    /// <summary>
+    /// Who struck the firestarter, so the batch can be credited to them when it comes out hours
+    /// later - see <see cref="XSkillsPottery"/>.
+    ///
+    /// Persisted, because a firing outlives the session that started it. Kept as a UID rather
+    /// than a player: resolving it at ignition would hold a reference to someone who may well
+    /// have logged out by the time the kiln finishes, and PlayerByUid returning null then is
+    /// exactly the answer wanted - nobody is here to be told.
+    ///
+    /// The vanilla kilns have no ignition of their own to hang this on, so XSkills stamps its
+    /// owner on whoever last touched them. This kiln is asked to be lit, by somebody, which is
+    /// a better answer than the one it would have had to guess.
+    /// </summary>
+    private string litByUid;
+
     // --- transient -------------------------------------------------------
     private int tickCounter;
 
@@ -734,6 +749,18 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
     private void FinishFiring()
     {
+        // Resolved once for the whole batch rather than per ware, and null whenever nobody is
+        // owed anything: no XSkills, the setting off, or whoever lit it has since logged out.
+        var creditTo = Cfg.GrantXSkillsExperience && XSkillsPottery.Bound && litByUid != null
+            ? Api.World.PlayerByUid(litByUid)
+            : null;
+
+        // What actually fired, kept with the pile it fired in: how many wares share a pile is
+        // part of what the batch is worth. Collected rather than credited on the spot because
+        // XSkills reads the finished stacks and may swap them, which has no business happening
+        // half way through deciding what they are.
+        var credited = creditTo == null ? null : new List<(BlockEntity Holder, ItemSlot Slot)>();
+
         WalkWares((storage, slot) =>
         {
             var raw = slot.Itemstack;
@@ -753,9 +780,14 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             slot.Itemstack = fired.Clone();
             slot.Itemstack.StackSize = Math.Max(1, raw.StackSize / ratio);
             slot.Itemstack.Collectible.SetTemperature(Api.World, slot.Itemstack, temperature);
+
+            credited?.Add((storage, slot));
+
             slot.MarkDirty();
             storage.MarkDirty(true);
         });
+
+        if (credited != null) XSkillsPottery.GrantFiring(Api, creditTo, credited);
 
         Lit = false;
         FiredEnergyHours = 0;
@@ -913,6 +945,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (!CanIgnite) return;
 
         Lit = true;
+        litByUid = byEntity?.PlayerUID;
         totalHoursLastUpdate = Api.World.Calendar.TotalHours;
         ClearHighlights();
         ApplyLitAppearance();
@@ -1420,6 +1453,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         burnCredit = tree.GetDouble("burnCredit");
         ChamberTemperature = tree.GetFloat("chamberTemperature");
         totalHoursLastUpdate = tree.GetDouble("totalHoursLastUpdate");
+        litByUid = tree.GetString("litByUid");
     }
 
     public override void ToTreeAttributes(ITreeAttribute tree)
@@ -1433,6 +1467,10 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         tree.SetDouble("burnCredit", burnCredit);
         tree.SetFloat("chamberTemperature", ChamberTemperature);
         tree.SetDouble("totalHoursLastUpdate", totalHoursLastUpdate);
+
+        // Only when there is one: a StringAttribute holding null throws on serialization, which
+        // takes the whole savegame write down rather than just this kiln.
+        if (litByUid != null) tree.SetString("litByUid", litByUid);
     }
 
     public override void GetBlockInfo(IPlayer forPlayer, StringBuilder dsc)

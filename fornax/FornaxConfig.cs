@@ -221,4 +221,39 @@ public class FornaxConfig
     [Category("What it fires")]
     [Description("Respect each ware's own maxFireable cap, as a pit kiln does. Off lets a full ground storage pile fire at once.")]
     public bool RespectMaxFireable = false;
+
+    // --- other mods --------------------------------------------------------
+
+    /// <summary>
+    /// Credit a finished firing to whoever lit the kiln, in XSkills' Pottery skill.
+    ///
+    /// On by default, because the alternative is that a potter who builds the better kiln stops
+    /// levelling: XSkills patches its own two kilns, has never heard of this one, and a firing
+    /// that earns nothing is a straight penalty for using the mod. What it awards is not this
+    /// mod's own idea of a fair number - it hands each finished ware to the same XSkills call
+    /// the vanilla kilns use, so the experience, the Pottery Timer message and the Inspiration
+    /// roll are whatever that skill says they are. Does nothing at all when XSkills is absent.
+    /// </summary>
+    [Category("Other mods")]
+    [Description("Credit a firing to whoever lit the kiln, in XSkills' Pottery skill, as the vanilla kilns do.")]
+    public bool GrantXSkillsExperience = true;
+
+    /// <summary>
+    /// What a full firing here earns in XSkills' Pottery skill, as a fraction of what the same
+    /// loading earns in a full beehive kiln.
+    ///
+    /// Three quarters, because that is about what this kiln is: it holds a third of a beehive
+    /// kiln's wares and fires them in a third of the positions, but it needs no iron and no
+    /// coal, so a potter working through the Bronze Age is not left levelling on pit kilns.
+    /// Paying the full rate would make the cheaper kiln the better one to grind in and leave the
+    /// beehive with nothing but capacity to recommend it.
+    ///
+    /// Scaled by capacity rather than applied flat - see XSkillsPottery.GrantFiring - so the
+    /// fraction holds however the chamber is loaded, and the headspace course that
+    /// FireContainersInChamber unlocks earns its own keep rather than diluting the rest.
+    /// </summary>
+    [Category("Other mods")]
+    [Description("What a full firing here earns in XSkills' Pottery skill, against a full beehive kiln firing.")]
+    [Range(0, 4)]
+    public float XSkillsExperienceVsBeehiveKiln = 0.75f;
 }

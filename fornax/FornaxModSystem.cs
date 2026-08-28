@@ -106,6 +106,7 @@ public class FornaxModSystem : ModSystem
         api.RegisterBlockEntityClass("UpdraftFirebox", typeof(BlockEntityUpdraftFirebox));
 
         RegisterWithConfigLib(api);
+        XSkillsPottery.Resolve(api);
     }
 
     private const string ConfigLibSystem = "ConfigLib.ConfigLibModSystem";

@@ -6,7 +6,7 @@
 #
 # A green run of the suite on its own proves less than it looks. Three defects in this mod were
 # invisible with fornax loaded alone and obvious the moment a real mod was in the world, and two
-# more only showed up under a non-default config. So: four mod sets x the whole suite, then the
+# more only showed up under a non-default config. So: five mod sets x the whole suite, then the
 # startup path at six settings.
 #
 # Everything is provisioned with cairn, so a fresh box needs nothing but a checkout of vstestkit
@@ -51,6 +51,8 @@ pack() {
 # Dependencies come along on their own: bricklayers pulls em, configlib pulls vsimgui.
 pack fornaxcompat bulkquicklime kilnshelves ceramicbucketbarrel bricklayers
 pack cfgprobe     configlib
+# xskillsfork rather than xskills: the fork is what is published for 1.22, and it pulls xlibfork.
+pack xskills      xskillsfork
 PROVISION
 
 echo
@@ -60,6 +62,7 @@ set -eu
 cd ~/vstestkit-fornax
 CFG=~/.cairn/packs/cfgprobe/Mods
 COMPAT=~/.cairn/packs/fornaxcompat/Mods
+XSKILLS=~/.cairn/packs/xskills/Mods
 
 bash scripts/stop.sh >/dev/null 2>&1 || true
 
@@ -73,7 +76,8 @@ set_run() {
 set_run "A  fornax alone"
 set_run "B  + configlib + vsimgui"  --mods "$CFG"
 set_run "C  + the report's mods"    --mods "$COMPAT"
-set_run "D  everything"             --mods "$CFG:$COMPAT"
+set_run "D  + xskills + xlib"       --mods "$XSKILLS"
+set_run "E  everything"             --mods "$CFG:$COMPAT:$XSKILLS"
 MODSETS
 
 echo
