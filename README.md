@@ -290,13 +290,17 @@ which is what lets 700 °C firewood fire pottery at all.
 
 | fuel       | burn temp | pieces per batch | firing time |
 |------------|-----------|------------------|-------------|
-| firewood   | 700 °C    | 10               | ~13 h       |
-| peat brick | 900 °C    | 10               | ~8 h        |
-| charcoal   | 1300 °C   | 6                | ~6 h        |
+| firewood   | 700 °C    | 30               | ~13 h       |
+| peat brick | 900 °C    | 29               | ~8 h        |
+| charcoal   | 1300 °C   | 18               | ~6 h        |
 
-Anything burning below 650 °C is refused. Wares convert through `combustibleProps.SmeltedStack`,
-so every modded clay ware works with no coordination — and the beehive kiln keeps its exclusive
-palette of fired colours.
+Anything burning below 650 °C is refused, which `MinFuelBurnTemperature` moves. A mod that
+retunes fuel wants that: BTRO-Fuels puts firewood, brushwood, bamboo, sticks and dried peat all
+at 600, so a world running it should set 600 here. That is the floor of the useful range — the
+chamber then reaches 850 °C, exactly what raw brick melts at.
+
+Wares convert through `combustibleProps.SmeltedStack`, so every modded clay ware works with no
+coordination — and the beehive kiln keeps its exclusive palette of fired colours.
 
 ## Opening it early
 

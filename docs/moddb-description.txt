@@ -10,10 +10,15 @@ the beehive kiln wants refractory brick and an iron door, which means a bloomery
 is the kiln that goes in between — raw mud brick, a clay grate floor, firewood or peat,
 and no iron at all.
 
+What it buys you is batch size without iron, not cheap firing: thirty-six
+wares in one go against a pit kiln's four, at about the same fuel per ware. Raw brick is the
+exception and stays well ahead — a full grate is 216 of them.
+
 pit kilnupdraft kilnbeehive kiln
 wares per firing4~36~108
-fuel per firing8 firewood10 firewood9 coal piles
-fuel per ware2.00.28—
+fuel per firing4 firewood30 firewoodup to 144 coal
+fuel per ware1.00.83~1.3
+firing time20 h8–13 h9 h
 iron needednonoyes
 
 Building it
@@ -32,9 +37,9 @@ Load green pottery or raw bricks onto the grate as ordinary ground storage, seal
 loading entrance with mud, fuel the firebox and light it. A batch costs a fixed amount of fuel
 energy whatever you burn — hotter fuel simply gets through it faster:
 
-10 firewood — about 13 hours
-10 peat bricks — about 8 hours
-6 charcoal — about 6 hours
+30 firewood — about 13 hours
+29 peat bricks — about 8 hours
+18 charcoal — about 6 hours
 
 The firebox tells you what it is doing from across the yard: dark when empty, firewood in
 the mouth when fuelled, glowing red coals while the chamber warms, and bright orange flame once
@@ -53,7 +58,7 @@ Notes
 
 Full handbook entry, in the style of the vanilla kiln pages.
 Works with any modded clay ware — anything the game can fire, this fires.
-XSkills: a firing counts towards the Pottery skill, credited to whoever lit the kiln, at 75% of
-what the same load earns in a beehive kiln.
+XSkills: a firing counts towards the Pottery skill, credited to whoever lit
+the kiln, at 75% of what the same load earns in a beehive kiln.
 Every number above is configurable in ModConfig/fornax.json.
 Named for the Latin for furnace. Everything in game is still called an updraft kiln.
