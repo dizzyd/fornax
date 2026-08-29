@@ -371,12 +371,33 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     public bool IsValidFuel(ItemStack stack)
     {
         if (stack?.Collectible == null) return false;
+        if (IsIgnitionTool(stack)) return false;
 
         var props = stack.Collectible.CombustibleProps;
         return props != null
                && props.BurnDuration > 0
                && props.BurnTemperature >= Cfg.MinFuelBurnTemperature;
     }
+
+    /// <summary>
+    /// Something whose job at this firebox is to light it, whatever else it may be.
+    ///
+    /// A firestarter burns at 600 and a lit torch at 600/8, so at the default threshold both are
+    /// refused as fuel by temperature alone and fall through to the ignite path. Lower
+    /// <see cref="FornaxConfig.MinFuelBurnTemperature"/> to 600 - which is exactly what a world
+    /// running BTRO-Fuels wants, since that mod puts firewood, brushwood, bamboo, sticks and
+    /// dried peat all at 600 - and they become valid fuel instead. The fuel branch in
+    /// <see cref="OnPlayerInteract"/> runs before the fall-through, and OnBlockInteractStart is
+    /// asked before the held item's own handler, so the click would post the player's firestarter
+    /// into the firebox and the kiln could never be lit at all.
+    ///
+    /// So this is not about temperature. Vanilla marks both: the firestarter by its class, a lit
+    /// torch by the CanIgnite behaviour its lit variants carry and its unlit ones do not, which
+    /// is the same pair of marks a mod's own lighter would use.
+    /// </summary>
+    private static bool IsIgnitionTool(ItemStack stack) =>
+        stack.Collectible is ItemFirestarter
+        || stack.Block?.GetBehavior<BlockBehaviorCanIgnite>() != null;
 
     private double FuelEnergyPerItem(ItemStack stack)
     {
@@ -1060,7 +1081,18 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             return false;
         }
 
-        if (!hotbar.Empty) return false;   // let firestarters and torches through to the ignite path
+        if (!hotbar.Empty)
+        {
+            // Held something that burns, but not hot enough. Said out loud rather than swallowed:
+            // the click otherwise does nothing whatsoever, which is indistinguishable from a
+            // broken block, and there is no other way to learn that a threshold exists - let
+            // alone that it is a config setting. A world running BTRO-Fuels lands here for its
+            // firewood, brushwood, bamboo, sticks and dried peat, all of which that mod puts at
+            // 600 against a floor of 650.
+            ExplainColdFuel(hotbar.Itemstack);
+
+            return false;   // let firestarters and torches through to the ignite path
+        }
 
         if (sneaking)
         {
@@ -1358,6 +1390,32 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         Api.World.HighlightBlocks(byPlayer, MultiblockStructure.HighlightSlotId, missing, colors);
 
         capi.TriggerIngameError(this, "guide", Lang.Get("fornax:guide-shown", missing.Count));
+    }
+
+    /// <summary>
+    /// Whether a held stack burns but not hot enough for this firebox, and the temperature it
+    /// does reach. False for anything that does not burn at all, and for a lighter.
+    /// </summary>
+    public bool IsTooCoolToBurn(ItemStack stack, out int burnsAt)
+    {
+        burnsAt = 0;
+        if (stack?.Collectible == null || IsIgnitionTool(stack)) return false;
+
+        var props = stack.Collectible.CombustibleProps;
+        if (props == null || props.BurnDuration <= 0) return false;
+
+        burnsAt = props.BurnTemperature;
+        return burnsAt < Cfg.MinFuelBurnTemperature;
+    }
+
+    /// <summary>Names the fuel, what it burns at, and what the firebox wants. See the caller.</summary>
+    private void ExplainColdFuel(ItemStack stack)
+    {
+        if (Api is not ICoreClientAPI capi) return;
+        if (!IsTooCoolToBurn(stack, out int burnsAt)) return;
+
+        capi.TriggerIngameError(this, "coldfuel",
+            Lang.Get("fornax:fuel-too-cold", stack.GetName(), burnsAt, Cfg.MinFuelBurnTemperature));
     }
 
     private void TriggerError(string code, string langKey)

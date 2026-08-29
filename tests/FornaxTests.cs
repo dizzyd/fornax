@@ -1550,6 +1550,143 @@ public class FornaxTests
         Assert.True(be.IsValidFuel(World.Stack("game:peatbrick", 1)));
     }
 
+    /// <summary>
+    /// Refusing cold fuel silently is the same defect as the grate used to have: right-clicking
+    /// the firebox with something that burns too cool does nothing whatsoever, which is
+    /// indistinguishable from a broken block, and leaves no way to learn that a threshold exists
+    /// - let alone that it is a setting. IsTooCoolToBurn is what the message is built from.
+    ///
+    /// It has to be narrow. Something that does not burn at all is not cold fuel, it is simply
+    /// not fuel, and a lighter is neither.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ColdFuelSaysWhatItBurnsAtAndWhatIsWanted()
+    {
+        BuildKiln();
+        await Ticks(2);
+
+        var be = Be();
+
+        Assert.True(be.IsTooCoolToBurn(World.Stack("game:drygrass", 4), out int grass),
+            "dry grass burns, just not hot enough - which is the thing worth saying");
+        Assert.Equal(600, grass, "and the message quotes the fuel's own number, not a constant");
+
+        Assert.True(!be.IsTooCoolToBurn(World.Stack("game:charcoal", 1), out _),
+            "charcoal is accepted, so there is nothing to explain");
+        Assert.True(!be.IsTooCoolToBurn(World.Stack("game:rawbrick-blue", 1), out _),
+            "a raw brick has combustibleProps but no burnDuration - it is not fuel at all");
+        Assert.True(!be.IsTooCoolToBurn(World.Stack("game:firestarter", 1), out _),
+            "and a firestarter is not cold fuel, it is how you light the thing");
+    }
+
+    /// <summary>
+    /// A lighter is never fuel, however low the threshold is set.
+    ///
+    /// The firestarter burns at 600/4 and a lit torch at 600/8, so at the default floor of 650
+    /// both are refused on temperature alone and fall through to the ignite path. Drop
+    /// MinFuelBurnTemperature to 600 - the setting a BTRO-Fuels world needs - and they become
+    /// valid fuel instead. That is not a cosmetic problem: the fuel branch in OnPlayerInteract
+    /// runs before the fall-through, and OnBlockInteractStart is asked before the held item's own
+    /// handler, so the click that should light the kiln would post the player's firestarter into
+    /// the firebox. A kiln that can never be lit, in the one configuration that asked for it.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ALighterIsNeverFuelHoweverLowTheThresholdGoes()
+    {
+        BuildKiln();
+        await Ticks(2);
+
+        var be = Be();
+        var firestarter = World.Stack("game:firestarter", 1);
+        var torch = World.Stack("game:torch-basic-lit-up", 1);
+
+        Assert.True(!be.IsValidFuel(firestarter), "at the default floor, on temperature alone");
+        Assert.True(!be.IsValidFuel(torch));
+
+        int floor = Cfg.MinFuelBurnTemperature;
+        try
+        {
+            Cfg.MinFuelBurnTemperature = 600;
+
+            Log($"at a floor of {Cfg.MinFuelBurnTemperature}: firestarter={be.IsValidFuel(firestarter)} " +
+                $"torch={be.IsValidFuel(torch)} drygrass={be.IsValidFuel(World.Stack("game:drygrass", 4))}");
+
+            Assert.True(!be.IsValidFuel(firestarter), "and at 600, where temperature no longer excludes it");
+            Assert.True(!be.IsValidFuel(torch), "same for a lit torch");
+            Assert.True(be.IsValidFuel(World.Stack("game:drygrass", 4)),
+                "while an ordinary 600 degree fuel is now accepted, which is the point of the setting");
+        }
+        finally
+        {
+            Cfg.MinFuelBurnTemperature = floor;
+        }
+    }
+
+    /// <summary>
+    /// The configuration a world running BTRO-Fuels needs, end to end.
+    ///
+    /// That mod patches firewood, brushwood, bamboo, sticks and dried peat all to 600C, one notch
+    /// under this kiln's floor, so none of them fuels it as it ships. MinFuelBurnTemperature has
+    /// always been the answer - but "the setting exists" is not the same as "the setting works",
+    /// and 600 sits on a knife edge that 650 does not.
+    ///
+    /// The chamber settles at 600 + DraftTemperatureBonus, which is 850 - exactly the melting
+    /// point of raw brick, refractory brick and shingle, the hottest wares this kiln fires. It
+    /// works only because IsTooCold compares strictly, so a later nudge to the draft bonus or to
+    /// that comparison would quietly stop the supported setting from firing the commonest ware in
+    /// the game. Firewood is dropped to 600 here rather than reaching for the real mod, because
+    /// that is precisely what its patch does and it keeps this in the ordinary suite.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task AFloorOfSixHundredFiresABatchOnSixHundredDegreeFuel()
+    {
+        var firewood = Sapi.World.GetItem(new AssetLocation("game:firewood"));
+        Assert.NotNull(firewood);
+
+        int floor = Cfg.MinFuelBurnTemperature;
+        int wasBurning = firewood.CombustibleProps.BurnTemperature;
+
+        try
+        {
+            firewood.CombustibleProps.BurnTemperature = 600;   // what BTRO-Fuels patches it to
+            Cfg.MinFuelBurnTemperature = 600;
+
+            BuildKiln();
+            LoadWare(0, 0, "game:rawbrick-blue", 8);
+            Fuel("game:firewood", 40);
+            await Ticks(2);
+            await Tick3s();
+
+            var be = Be();
+            Assert.True(be.IsValidFuel(World.Stack("game:firewood", 1)), "600 degree firewood is fuel now");
+
+            be.ChamberVersus(World.Stack("game:rawbrick-blue", 1), out int reaches, out int needs);
+            Log($"chamber reaches {reaches}°C, raw brick needs {needs}°C");
+            Assert.Equal(850, reaches, "600 fuel plus the draft bonus");
+            Assert.Equal(850, needs, "which is exactly what a raw brick wants - no margin at all");
+            Assert.Null(be.FirstTooColdOnGrate(), "so the kiln must not call its own load unfireable");
+
+            be.TryIgnite(null);
+            Assert.True(be.Lit, "and it must light on that fuel");
+
+            for (int i = 0; i < 12 && be.Lit; i++)
+            {
+                await Hours(3);
+                await Tick3s();
+            }
+
+            var fired = World.BE<BlockEntityGroundStorage>(Ware(0, 0)).Inventory[0].Itemstack;
+            Log($"after firing: {fired?.StackSize}x {fired?.Collectible?.Code}");
+            Assert.Equal("game:burnedbrick-gray", fired?.Collectible?.Code?.ToString(),
+                "a full batch fires at the very bottom of the supported range");
+        }
+        finally
+        {
+            firewood.CombustibleProps.BurnTemperature = wasBurning;
+            Cfg.MinFuelBurnTemperature = floor;
+        }
+    }
+
 
     // ------------------------------------------------------------------
     //  Lighting it, the way a player actually does
@@ -1650,6 +1787,61 @@ public class FornaxTests
 
         Log($"lit={be.Lit} after {attempts} firestarter attempt(s)");
         Assert.True(be.Lit, "holding a firestarter on the firebox should light the kiln");
+    }
+
+    /// <summary>
+    /// And the same gesture again with the floor dropped to 600, which is the whole reason
+    /// ALighterIsNeverFuelHoweverLowTheThresholdGoes exists.
+    ///
+    /// A firestarter burns at 600/4. Once 600 is acceptable fuel it satisfies IsValidFuel like
+    /// anything else, and the fuel branch of OnPlayerInteract takes the click before the
+    /// fall-through that ItemFirestarter needs - so the firestarter goes in the firebox and the
+    /// kiln never lights. Only the real input path shows that: called directly, TryIgnite does
+    /// not care what the player is holding.
+    /// </summary>
+    [VsTest(TimeoutMs = 240000)]
+    [RequiresClient]
+    public async Task LightingItWorksWithTheFloorDroppedToSixHundred()
+    {
+        int floor = Cfg.MinFuelBurnTemperature;
+        try
+        {
+            Cfg.MinFuelBurnTemperature = 600;
+
+            BuildKiln();
+            Fuel("game:firewood", 16);
+            await Ticks(2);
+            await Tick3s();
+
+            var be = Be();
+            Assert.True(be.StructureComplete);
+            int fuelled = be.FuelItemCount();
+
+            await Player.StandNear(Fb().AddCopy(0, 0, 3));
+            await Ticks(5);
+            await Player.Hold("game:firestarter", 1);
+            await Ticks(5);
+
+            int attempts = 0;
+            for (; attempts < 20 && !be.Lit; attempts++)
+            {
+                await Interact.UseBlock(Fb(), BlockFacing.SOUTH, holdFrames: 150);
+                await Ticks(4);
+            }
+
+            var held = Sapi.World.AllOnlinePlayers[0].InventoryManager.ActiveHotbarSlot.Itemstack;
+            Log($"lit={be.Lit} after {attempts} attempt(s); fuel {fuelled} -> {be.FuelItemCount()}; " +
+                $"still holding {held?.Collectible?.Code?.ToString() ?? "(nothing)"}");
+
+            Assert.Equal("game:firestarter", held?.Collectible?.Code?.ToString(),
+                "the firestarter must not have been shovelled into the firebox as fuel");
+            Assert.Equal(fuelled, be.FuelItemCount(), "and the firebox holds only the firewood");
+            Assert.True(be.Lit, "the kiln lights at a floor of 600 like it does at 650");
+        }
+        finally
+        {
+            Cfg.MinFuelBurnTemperature = floor;
+        }
     }
 
     /// <summary>

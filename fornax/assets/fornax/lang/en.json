@@ -25,6 +25,7 @@
 	"fornax:fuel-none": "No fuel. Add firewood, peat bricks or charcoal.",
 	"fornax:fuel-remaining": "Fuel: {0} pieces (about {1:0.#} hours of burn)",
 	"fornax:fuel-short": "Only about {0}% of a full firing — add more fuel.",
+	"fornax:fuel-too-cold": "{0} burns at {1}°C — the firebox needs {2}°C or hotter. Try charcoal, peat bricks or dry firewood.",
 	"fornax:not-lit": "Ready to fire. Light the firebox with a firestarter or torch.",
 	"fornax:already-lit": "This kiln is already firing.",
 	"fornax:cant-refuel-while-firing": "The kiln is firing — you can't get at the firebox until the batch is done.",
