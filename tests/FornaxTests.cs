@@ -2440,7 +2440,7 @@ public class FornaxTests
         Assert.NotNull(page);
 
         string title = Lang.Get(page["title"]);
-        string text = Lang.Get(page["text"]);
+        string text = Lang.Get(page["text"], 0, 0);
         Log($"page title key = {page["title"]}");
 
         Assert.True(!title.Contains("gamemechanicinfo"), "title lang key is missing");
@@ -2478,6 +2478,84 @@ public class FornaxTests
         if (dead.Count > 0) Log("dead: " + string.Join(", ", dead));
         Assert.Equal(0, dead.Count);
         await Ticks(1);
+    }
+
+    /// <summary>
+    /// The two numbers in the handbook that are settings rather than facts.
+    ///
+    /// They were written into the prose as literals, so a server that moved either had the page
+    /// quoting it the default - and a player who reads "anything burning cooler than 650 degrees
+    /// is refused" while the firebox happily takes 600 concludes the mod is broken, not the page.
+    /// The placeholders are the fragile half: a translation that drops one, or a later edit that
+    /// writes the number back in, fails silently and only in prose.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task TheHandbookQuotesTheConfiguredNumbersNotTheDefaults()
+    {
+        string raw = Lang.GetUnformatted(FornaxModSystem.HandbookTextKey);
+        Assert.Contains(raw, "{0}", "the fuel floor has to be a placeholder, not a literal");
+        Assert.Contains(raw, "{1}", "and so does the shatter-safe temperature");
+
+        string filled = Lang.Get(FornaxModSystem.HandbookTextKey, 600, 400);
+        Log($"handbook says: ...{filled.Substring(filled.IndexOf("cooler than"), 60)}...");
+
+        Assert.Contains(filled, "cooler than 600 degrees is refused");
+        Assert.Contains(filled, "nothing at 400 degrees");
+        Assert.True(!filled.Contains("{0}") && !filled.Contains("{1}"), "and nothing left unfilled");
+        Assert.True(!filled.Contains("650 degrees"), "the default must not survive a changed config");
+
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// The same thing through the wiring the game actually uses: the page as the handbook dialog
+    /// loads it, handed to the hook fornax registers on ModSystemSurvivalHandbook.
+    ///
+    /// The lang test above passes even if the page config names a different code, or if
+    /// GuiHandbookTextPage stops taking already-formatted text - Init resolves Text through
+    /// Lang.Get only when it is under 255 characters, which is the whole reason handing it the
+    /// finished string works, and it is not a promise anyone made us.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    [RequiresClient]
+    public async Task TheHandbookHookFillsInTheRealPage()
+    {
+        int floor = Cfg.MinFuelBurnTemperature;
+        try
+        {
+            Cfg.MinFuelBurnTemperature = 600;
+
+            await OnClient();
+
+            var capi = Vs.Capi;
+            var pages = capi.Assets
+                .GetMany<GuiHandbookTextPage>(capi.Logger, "config/handbook")
+                .Select(pair => pair.Value)
+                .Cast<GuiHandbookPage>()
+                .ToList();
+
+            var ours = pages.OfType<GuiHandbookTextPage>()
+                .FirstOrDefault(p => p.PageCode == FornaxModSystem.HandbookPageCode);
+            Assert.NotNull(ours, "the page config and FornaxModSystem must agree on the page code");
+
+            ours.Init(capi);   // what GuiDialogSurvivalHandbook does before the hook runs
+            string before = ours.Text;
+
+            capi.ModLoader.GetModSystem<FornaxModSystem>().FillInHandbookNumbers(pages);
+            string after = ours.Text;
+
+            await OnServer();
+
+            Log($"before: placeholder={before.Contains("{0}")}; after: 600={after.Contains("cooler than 600 degrees")}");
+
+            Assert.Contains(before, "{0}", "unfilled, the page carries the placeholder");
+            Assert.Contains(after, "cooler than 600 degrees is refused", "and the hook puts the setting in");
+            Assert.True(!after.Contains("{0}"), "with nothing left over");
+        }
+        finally
+        {
+            Cfg.MinFuelBurnTemperature = floor;
+        }
     }
 
     // ------------------------------------------------------------------

@@ -11,8 +11,10 @@ using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
 using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
+using Vintagestory.GameContent;
 
 namespace Fornax;
 
@@ -74,6 +76,48 @@ public class FornaxModSystem : ModSystem
 
         capi = api;
         GhostRenderer = new KilnGhostRenderer(api);
+
+        var handbook = api.ModLoader.GetModSystem<ModSystemSurvivalHandbook>();
+        if (handbook != null) handbook.OnInitCustomPages += FillInHandbookNumbers;
+    }
+
+    /// <summary>The handbook page, and the key its prose lives under.</summary>
+    public const string HandbookPageCode = "gamemechanicinfo-fornax";
+    public const string HandbookTextKey = "fornax:gamemechanicinfo-fornax-text";
+
+    /// <summary>
+    /// Puts the configured numbers into the handbook page, which otherwise states the defaults
+    /// as fact.
+    ///
+    /// Two of the page's numbers are settings - the fuel temperature floor and the temperature
+    /// below which opening the kiln is free - and they were written into the prose as literals.
+    /// Change either and the handbook goes on quoting the default, which is worse than saying
+    /// nothing: a player reads "anything burning cooler than 650 degrees is refused" on a server
+    /// that set 600 and concludes the mod is broken rather than that the page is.
+    ///
+    /// Only those two. The rest of the page's numbers are spelled out as words - thirty firewood,
+    /// about thirteen hours - because it reads better that way, and turning readable prose into
+    /// digits to keep a rarely-changed default honest is a poor trade. The firebox itself reports
+    /// its live numbers on every look, which is where a number that moves belongs.
+    ///
+    /// GuiHandbookTextPage.Init resolves Text through Lang.Get only when it is under 255
+    /// characters, and treats anything longer as the finished VTML - so handing it the already
+    /// formatted string and re-running Init composes the interpolated text without a second
+    /// lookup. The pages are built once with the handbook dialog, so a value changed mid-session
+    /// through ConfigLib shows up the next time the game loads rather than at once.
+    /// </summary>
+    public void FillInHandbookNumbers(List<GuiHandbookPage> pages)
+    {
+        if (capi == null) return;
+
+        foreach (var page in pages)
+        {
+            if (page is not GuiHandbookTextPage text || text.PageCode != HandbookPageCode) continue;
+
+            text.Text = Lang.Get(HandbookTextKey, Config.MinFuelBurnTemperature, Config.ShatterSafeTemperature);
+            text.Init(capi);
+            return;
+        }
     }
 
     /// <summary>
