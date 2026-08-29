@@ -386,6 +386,30 @@ public class FornaxTests
     }
 
     /// <summary>
+    /// One entry out of a zip, as text, or null if it is not in there.
+    ///
+    /// By reflection because System.IO.Compression is not among the assemblies loaded in the
+    /// game process, so the Roslyn that compiles these tests inside the game cannot bind ZipFile
+    /// at compile time - even though the assembly is sitting in the shared framework and loads
+    /// perfectly well by name at run time. That is the whole of the workaround.
+    /// </summary>
+    private static string ReadFromZip(string zipPath, string entryName)
+    {
+        var zipFile = System.Reflection.Assembly.Load("System.IO.Compression.ZipFile")
+            .GetType("System.IO.Compression.ZipFile");
+
+        using var archive = (IDisposable)zipFile.GetMethod("OpenRead").Invoke(null, new object[] { zipPath });
+
+        object entry = archive.GetType().GetMethod("GetEntry", new[] { typeof(string) })
+            .Invoke(archive, new object[] { entryName });
+        if (entry == null) return null;
+
+        using var stream = (System.IO.Stream)entry.GetType().GetMethod("Open").Invoke(entry, null);
+        using var reader = new System.IO.StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>
     /// modinfo.json may only carry keys that ModInfo actually declares. The game tolerates
     /// extras and loads the mod anyway, but ModDB parses strictly and refuses the upload with
     /// "Unexpected property 'x' on modinfo.json" - so a bad key gets all the way to a released
@@ -400,13 +424,24 @@ public class FornaxTests
         foreach (var m in Sapi.ModLoader.Mods) if (m.Info?.ModID == "fornax") mod = m;
         Assert.NotNull(mod);
 
-        string dir = mod.SourcePath;
-        if (System.IO.File.Exists(dir)) dir = System.IO.Path.GetDirectoryName(dir);
-        string file = System.IO.Path.Combine(dir, "modinfo.json");
-        Log("reading " + file);
-        Assert.True(System.IO.File.Exists(file), "cannot find modinfo.json at " + file);
+        // A released mod is a zip, and that is precisely the case this test is about - reading
+        // the sibling directory of a zip finds nothing, so the check that exists to catch a bad
+        // key before it ships was the one check that could not be run against the shipped thing.
+        string raw;
+        string source = mod.SourcePath;
+        Log("reading modinfo.json from " + source);
 
-        string raw = System.IO.File.ReadAllText(file);
+        if (System.IO.File.Exists(source))
+        {
+            raw = ReadFromZip(source, "modinfo.json");
+            Assert.NotNull(raw, "no modinfo.json inside " + source);
+        }
+        else
+        {
+            string file = System.IO.Path.Combine(source, "modinfo.json");
+            Assert.True(System.IO.File.Exists(file), "cannot find modinfo.json at " + file);
+            raw = System.IO.File.ReadAllText(file);
+        }
 
         var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var m in typeof(ModInfo).GetMembers())
