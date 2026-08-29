@@ -20,13 +20,16 @@ using static VsTestkit.Testing.Vs;
 ///
 /// Every test here skips itself when the mod it is about is not installed, so this file costs
 /// an ordinary run nothing and only says something under <c>scripts/test-matrix.sh</c>, which
-/// provisions the mod sets and runs the suite against each. That is not ceremony: three
+/// provisions the mod sets and runs the suite against each. That is not ceremony: four
 /// separate defects in this mod were invisible with Fornax loaded alone and obvious the moment
 /// a real mod was in the world -
 ///
 ///   - Stackable Kiln Shelves' block entity DERIVES from BlockEntityGroundStorage, so the
 ///     obvious "is" test read a shelf as an ordinary pile and fired two courses of shelving
 ///     whatever the config said;
+///   - Dense Ground Storage REGISTERS its subclass as "GroundStorage", so the exact-type test
+///     that fixed the shelf found no plain ground storage anywhere and the kiln refused every
+///     ware in the game;
 ///   - BulkQuicklime ships no lang file at all, so a name lookup fell through to a raw lang
 ///     key and the kiln offered to fire "bulkquicklime:block-limepile";
 ///   - Bricklayers raises raw brick's maxFireable from 12 to 16 and its pile from 24 to 32, so
@@ -170,7 +173,7 @@ public class CompatTests
         var shelfBe = World.BEOrNull<BlockEntity>(Ware(0, 0));
         Assert.True(shelfBe is BlockEntityGroundStorage,
             "the trap this test exists for: a shelf IS a BlockEntityGroundStorage by inheritance");
-        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(shelfBe),
+        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(Sapi, shelfBe),
             "which is why the kiln compares the type exactly instead");
 
         var inventory = ((BlockEntityContainer)shelfBe).Inventory;
@@ -212,6 +215,80 @@ public class CompatTests
         {
             FornaxModSystem.Config.FireContainersInChamber = false;
         }
+    }
+
+    // ------------------------------------------------------------------
+    //  Dense Ground Storage
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A pile is still a pile when another mod supplies the class it is built from.
+    ///
+    /// The mirror image of the shelf test above, and the reason that one's fix could not simply
+    /// be typeof(BlockEntityGroundStorage). Dense Ground Storage calls
+    /// RegisterBlockEntityClass("GroundStorage", typeof(BlockEntityDenseGroundStorage)) in its
+    /// Start - unconditionally, on both sides, before it reads any config of its own - and the
+    /// class registry takes the last registration, so every pile in the world is that subclass
+    /// whether or not the player ever placed anything densely.
+    ///
+    /// Against a literal typeof, "plain ground storage" then described nothing at all: the kiln
+    /// counted no wares, refused to fire anything in the game, and named what it was refusing
+    /// through the pile's placed-block name - "cannot fire Raw brick". The structure survey said
+    /// complete throughout, so there was nothing to go on.
+    ///
+    /// Only the real mod catches this. The class it registers exists solely when it is
+    /// installed, and a stand-in registered from the test would be this mod asserting against
+    /// its own fixture rather than against what somebody actually ships.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task APileIsStillAPileWhenAnotherModSuppliesItsClass()
+    {
+        if (!Needs("densegroundstorage")) return;
+
+        var registered = Sapi.ClassRegistry.GetBlockEntity(BlockEntityUpdraftFirebox.GroundStorageClass);
+        Log($"'{BlockEntityUpdraftFirebox.GroundStorageClass}' is registered as {registered}");
+        Assert.True(registered != typeof(BlockEntityGroundStorage),
+            "with the mod installed, ordinary ground storage is somebody else's class");
+
+        FornaxTests.Build(Fb());
+        await Ticks(4);
+        World.SetBlock("game:groundstorage", Ware(0, 0));
+        await Ticks(1);
+
+        var storage = World.BEOrNull<BlockEntityGroundStorage>(Ware(0, 0));
+        Assert.NotNull(storage, "a pile is one of these by inheritance, however it was registered");
+        Assert.True(storage.GetType() != typeof(BlockEntityGroundStorage),
+            "but not that class exactly - which is the trap this test exists for");
+        Assert.True(BlockEntityUpdraftFirebox.IsPlainGroundStorage(Sapi, storage),
+            "and the kiln has to read it as a plain pile all the same");
+
+        storage.Inventory[0].Itemstack = World.Stack("game:rawbrick-blue", 8);
+        storage.Inventory[0].MarkDirty();
+        storage.MarkDirty(true);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.True(!FornaxModSystem.Config.FireContainersInChamber,
+            "and on the default config, rather than by way of the containers switch");
+
+        Log($"complete={be.StructureComplete} wares={be.CountWares()} " +
+            $"unfireable={be.FirstUnfireableOnGrate() ?? "(none)"}");
+
+        Assert.Equal(8, be.CountWares(), "the bricks are part of the batch");
+        Assert.Null(be.FirstUnfireableOnGrate(), "and the kiln does not offer to refuse them");
+
+        be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
+        be.Inventory[0].MarkDirty();
+        await Tick3s();
+        be.TryIgnite(null);
+
+        for (int i = 0; i < 10 && be.Lit; i++) { await Hours(3); await Tick3s(); }
+
+        var fired = World.BEOrNull<BlockEntityGroundStorage>(Ware(0, 0))?.Inventory[0].Itemstack;
+        Log($"after firing, the pile holds: {fired?.StackSize}x {fired?.Collectible?.Code}");
+        Assert.Equal("game:burnedbrick-gray", fired?.Collectible?.Code?.ToString(),
+            "and the batch fired like any other");
     }
 
     // ------------------------------------------------------------------

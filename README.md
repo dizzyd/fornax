@@ -108,6 +108,17 @@ subtlety is the whole reason the switch works: `BlockEntityKilnShelf` *derives f
 `BlockEntityGroundStorage`, so `be is BlockEntityGroundStorage` reads a shelf as an ordinary pile
 and fires two courses of shelving no matter what the config says. Compare types exactly.
 
+Exactly — but not against a `typeof`. The type a pile is built from is a *registration*, and a
+mod may supply its own: Dense Ground Storage calls
+`RegisterBlockEntityClass("GroundStorage", typeof(BlockEntityDenseGroundStorage))` in its `Start`,
+unconditionally and on both sides, and the class registry takes the last one in. Every pile in
+that world is then a subclass, densely placed or not. Against `typeof(BlockEntityGroundStorage)`
+nothing anywhere was plain ground storage, so the kiln counted no wares, refused every ware in
+the game, and named what it was refusing through the pile's placed-block name — *"cannot fire Raw
+brick"*, with the structure reading complete throughout. So the comparison asks
+`Api.ClassRegistry.GetBlockEntity("GroundStorage")` what a pile is now. Kiln shelves register
+under their own name, `BEKilnShelf`, so a shelf is still not a pile.
+
 ### Heat
 
 A ware that needs more heat than the loaded fuel will give is not fired, and the kiln says which

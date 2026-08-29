@@ -49,7 +49,9 @@ pack() {
 
 # The mods from the incompatibility report, plus configlib for the settings GUI and server sync.
 # Dependencies come along on their own: bricklayers pulls em, configlib pulls vsimgui.
-pack fornaxcompat bulkquicklime kilnshelves ceramicbucketbarrel bricklayers
+# densegroundstorage is not from the report - it replaces the registered "GroundStorage" block
+# entity class outright, which is the one thing that breaks reading a pile at all.
+pack fornaxcompat bulkquicklime kilnshelves ceramicbucketbarrel bricklayers densegroundstorage
 pack cfgprobe     configlib
 # xskillsfork rather than xskills: the fork is what is published for 1.22, and it pulls xlibfork.
 pack xskills      xskillsfork

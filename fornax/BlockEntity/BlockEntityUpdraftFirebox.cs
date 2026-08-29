@@ -518,11 +518,31 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// precisely the thing <see cref="FornaxConfig.FireContainersInChamber"/> exists to decide.
     /// </summary>
     private bool IsWareHolder(BlockEntity be) =>
-        be is BlockEntityContainer && (Cfg.FireContainersInChamber || IsPlainGroundStorage(be));
+        be is BlockEntityContainer && (Cfg.FireContainersInChamber || IsPlainGroundStorage(Api, be));
 
-    /// <summary>Ground storage itself, and nothing derived from it. See <see cref="IsWareHolder"/>.</summary>
-    public static bool IsPlainGroundStorage(BlockEntity be) =>
-        be?.GetType() == typeof(BlockEntityGroundStorage);
+    /// <summary>The class name every ordinary ground storage pile is built from.</summary>
+    public const string GroundStorageClass = "GroundStorage";
+
+    /// <summary>
+    /// Ground storage itself, and nothing derived from it. See <see cref="IsWareHolder"/>.
+    ///
+    /// The type to compare against is asked of the class registry rather than written down as
+    /// typeof(BlockEntityGroundStorage), because "ordinary ground storage" is a registration, not
+    /// a class. A mod is free to call RegisterBlockEntityClass("GroundStorage", ...) with a
+    /// subclass of its own, and that replaces what every pile in the world is built from -
+    /// Dense Ground Storage does exactly this, unconditionally, in its Start. Against a literal
+    /// typeof that reads as "no plain ground storage exists anywhere", and the kiln quietly
+    /// refuses every ware in the game until the player finds this config switch.
+    ///
+    /// Asking the registry keeps the distinction the switch is actually about. Stackable Kiln
+    /// Shelves registers its BlockEntityKilnShelf under its own name, "BEKilnShelf", so a shelf
+    /// is still not a pile - which is the whole point, since it derives from
+    /// BlockEntityGroundStorage and an "is" test cannot tell them apart.
+    /// </summary>
+    public static bool IsPlainGroundStorage(ICoreAPI api, BlockEntity be) =>
+        be != null
+        && be.GetType() == (api?.ClassRegistry?.GetBlockEntity(GroundStorageClass)
+                            ?? typeof(BlockEntityGroundStorage));
 
     /// <summary>Every occupied slot in the chamber a firing can reach, fireable or not.</summary>
     private void WalkGrate(Action<BlockEntity, ItemSlot> onSlot)

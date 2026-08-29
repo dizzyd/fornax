@@ -968,19 +968,29 @@ public class FornaxTests
     /// "is BlockEntityGroundStorage" says true and the kiln fires two courses of shelving with
     /// the config switched off. Exact type, not "is". Verified against the real mod by hand; this
     /// keeps it honest without needing the mod installed.
+    ///
+    /// The type compared against comes from the class registry rather than a typeof, because a
+    /// mod may register its own subclass as "GroundStorage" and so supply the class every pile
+    /// in the world is built from - see CompatTests, which asserts that against Dense Ground
+    /// Storage. So the pile here is built the same way the world builds one, rather than newed
+    /// up: under such a mod a literal BlockEntityGroundStorage is genuinely not what a pile is.
     /// </summary>
     [VsTest]
     public async Task ASubclassOfGroundStorageIsNotPlainGroundStorage()
     {
-        var plain = new BlockEntityGroundStorage();
+        var registered = Sapi.ClassRegistry.GetBlockEntity(BlockEntityUpdraftFirebox.GroundStorageClass);
+        var plain = Sapi.ClassRegistry.CreateBlockEntity(BlockEntityUpdraftFirebox.GroundStorageClass);
         var shelfLike = new ShelfLikeStorage();
 
+        Log($"'{BlockEntityUpdraftFirebox.GroundStorageClass}' is registered as {registered}");
+
+        Assert.True(plain is BlockEntityGroundStorage, "whatever supplies it, a pile is still one of these");
         Assert.True(shelfLike is BlockEntityGroundStorage, "the trap: an is-test cannot tell them apart");
 
-        Assert.True(BlockEntityUpdraftFirebox.IsPlainGroundStorage(plain));
-        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(shelfLike),
+        Assert.True(BlockEntityUpdraftFirebox.IsPlainGroundStorage(Sapi, plain));
+        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(Sapi, shelfLike),
             "a subclass is a mod doing more than a heap on the floor, and the config decides about it");
-        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(null));
+        Assert.True(!BlockEntityUpdraftFirebox.IsPlainGroundStorage(Sapi, null));
 
         await Ticks(1);
     }
