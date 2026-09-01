@@ -22,12 +22,25 @@ public class ModDbShots
     private const string Vent = "fornax:kilnvent-idle";
     private const string Firebox = "fornax:kilnfirebox-cold-south";
 
+    private const string BrickWall = "game:claybricks-good-fire";
+    private const string BrickFirebox = "fornax:kilnbrickfirebox-cold-south";
+    private const string WicketLuted = "fornax:kilndoor-luted-south";
+    private const string WicketOpen = "fornax:kilndoor-open-south";
+
     private static string Out(string name) => System.IO.Path.Combine(
         Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", name);
 
     /// <param name="upto">highest course to place; 5 is the cap</param>
-    private static void Build(BlockPos f, int upto = 5, bool sealIt = true, bool openFront = false)
+    /// <param name="brick">
+    /// The brick kiln instead of the mud one: fired brick shell, brick firebox, and the
+    /// entrance narrowed from a three-wide face of seals to a one-wide wicket, with plain wall
+    /// where the outer two seals were.
+    /// </param>
+    private static void Build(BlockPos f, int upto = 5, bool sealIt = true, bool openFront = false, bool brick = false)
     {
+        string wall = brick ? BrickWall : Wall;
+        string box = brick ? BrickFirebox : Firebox;
+
         for (int y = 0; y <= Math.Min(upto, 3); y++)
         {
             for (int dx = -2; dx <= 2; dx++)
@@ -36,20 +49,24 @@ public class ModDbShots
                 {
                     bool corner = Math.Abs(dx) == 2 && (dz == 0 || dz == -4);
                     bool perim = Math.Abs(dx) == 2 || dz == 0 || dz == -4;
+                    bool entrance = (y == 2 || y == 3) && dz == 0 && (brick ? dx == 0 : Math.Abs(dx) <= 1);
                     string code;
 
                     if (corner && y >= 2) code = "game:air";
                     else if (perim)
                     {
-                        if (y == 0 && dx == 0 && dz == 0) code = Firebox;
-                        else if ((y == 2 || y == 3) && dz == 0 && Math.Abs(dx) <= 1) code = sealIt ? Seal : "game:air";
+                        if (y == 0 && dx == 0 && dz == 0) code = box;
+                        // The brick kiln's panels are permanent - unsealed means unluted and
+                        // standing open, not gone, which is what a finished firing leaves.
+                        else if (entrance) code = brick ? (sealIt ? WicketLuted : WicketOpen)
+                                                        : (sealIt ? Seal : "game:air");
                         // cutaway: drop the front wall so the chamber is visible
                         else if (openFront && dz == 0 && y >= 1) code = "game:air";
-                        else code = Wall;
+                        else code = wall;
                     }
                     else
                     {
-                        if (y == 0) code = (dx == 0 && dz == -2) ? Wall : "game:air";
+                        if (y == 0) code = (dx == 0 && dz == -2) ? wall : "game:air";
                         else if (y == 1) code = Grate;
                         else code = "game:air";
                     }
@@ -62,12 +79,12 @@ public class ModDbShots
         if (upto >= 4)
             for (int dx = -1; dx <= 1; dx++)
                 for (int dz = -1; dz >= -3; dz--)
-                    World.SetBlock((dx == 0 && dz == -2) ? "game:air" : Wall, f.AddCopy(dx, 4, dz));
+                    World.SetBlock((dx == 0 && dz == -2) ? "game:air" : wall, f.AddCopy(dx, 4, dz));
 
         if (upto >= 5)
             for (int dx = -1; dx <= 1; dx++)
                 for (int dz = -1; dz >= -3; dz--)
-                    World.SetBlock((dx == 0 && dz == -2) ? Vent : Wall, f.AddCopy(dx, 5, dz));
+                    World.SetBlock((dx == 0 && dz == -2) ? Vent : wall, f.AddCopy(dx, 5, dz));
     }
 
     private static void LoadWares(BlockPos f, string code = "game:rawbrick-blue", int n = 12)
@@ -100,9 +117,16 @@ public class ModDbShots
     /// <summary>
     /// Empties a generous box around the subject and lays fresh turf. Test plots sit close
     /// enough together that a neighbour's leftovers wander into frame otherwise.
+    ///
+    /// The load is not optional. A plot has only its own chunks resident, and every one of
+    /// these SetBlocks past that boundary is a silent no-op - which is why the neighbouring
+    /// kiln on this shot's horizon survived a clear that reached well past it, and why raising
+    /// the radius never once helped.
     /// </summary>
-    private static void ClearAround(BlockPos centre, int r = 40)
+    private static async Task ClearAround(BlockPos centre, int r = 40)
     {
+        await World.LoadArea(centre.AddCopy(-r, -1, -r), centre.AddCopy(r, 16, r));
+
         for (int dx = -r; dx <= r; dx++)
         {
             for (int dz = -r; dz <= r; dz++)
@@ -167,7 +191,7 @@ public class ModDbShots
     {
         await World.SetCalendarTo(500 * 24 + 9);       // low morning sun, long shadows
         BlockPos f = P(24, 1, 20);
-        ClearAround(f);
+        await ClearAround(f);
         Build(f);
         LoadWares(f);
         await Ticks(10);
@@ -186,7 +210,7 @@ public class ModDbShots
     {
         await World.SetCalendarTo(500 * 24 + 11);
         BlockPos f = P(24, 1, 20);
-        ClearAround(f);
+        await ClearAround(f);
         World.SetBlock(Firebox, f);
         await Ticks(8);
 
@@ -206,7 +230,7 @@ public class ModDbShots
     public async Task Shot03_ConstructionStages()
     {
         await World.SetCalendarTo(500 * 24 + 10);
-        ClearAround(P(33, 1, 22), 52);
+        await ClearAround(P(33, 1, 22), 52);
         for (int i = 0; i < 7; i++)
         {
             BlockPos f = P(9 + i * 8, 1, 22);
@@ -233,7 +257,7 @@ public class ModDbShots
     {
         await World.SetCalendarTo(500 * 24 + 14);
         BlockPos f = P(24, 1, 20);
-        ClearAround(f);
+        await ClearAround(f);
         Build(f, openFront: true, sealIt: false);
         LoadWares(f, "game:bowl-blue-raw", 4);
         await Ticks(10);
@@ -257,7 +281,7 @@ public class ModDbShots
             "fornax:kilnfirebox-warming-north",
             "fornax:kilnfirebox-firing-north",
         };
-        ClearAround(P(16, 1, 18), 34);
+        await ClearAround(P(16, 1, 18), 34);
         for (int i = 0; i < codes.Length; i++) World.SetBlock(codes[i], P(11 + i * 3, 1, 18));
         await Ticks(60);
 
@@ -273,7 +297,7 @@ public class ModDbShots
     {
         await World.SetCalendarTo(500 * 24 + 20);      // late dusk
         BlockPos f = P(24, 1, 20);
-        ClearAround(f);
+        await ClearAround(f);
         Build(f);
         LoadWares(f);
         await Ticks(10);
@@ -283,6 +307,112 @@ public class ModDbShots
         await Aim(P(21, 2, 27), P(24, 3, 19));
         await HideHud();
         Log("06 -> " + await Shot.Take(Out("06-firing-at-night.png")));
+    }
+
+    // ---- the brick kiln ----------------------------------------------
+    //
+    // Appended rather than slotted in among the mud kiln's shots, so the numbering of a set
+    // already published on ModDB does not shift under it.
+    //
+    // These three call HideGuis as well as HideHud, so that each is complete on its own. The
+    // mud kiln's shots do not, and come out with the hotbar and stat bars to be cropped off
+    // afterwards - which works only because Shot07 turns the HUD off for the rest of the
+    // session. Run one of those alone with --filter and the crop is back.
+
+    /// <summary>The brick kiln, lit — framed as shot 01 is, so the two read as a pair.</summary>
+    [VsTest(TimeoutMs = 300000)]
+    [RequiresClient]
+    [PlotSize(80, 32)]
+    public async Task Shot08_BrickKilnFiring()
+    {
+        await World.SetCalendarTo(500 * 24 + 9);       // low morning sun, long shadows
+        BlockPos f = P(40, 1, 20);
+        // Reaches past the neighbouring plot, which used to stand whole on this shot's horizon.
+        //
+        // One speck is still out there and no radius removes it - 44, 56 and 80 all leave it
+        // the same size in the same place, so it belongs to a plot further off than LoadArea
+        // will reach from here. It is about fifty pixels of distant kiln on the horizon and
+        // reads as another kiln in the yard rather than as a mistake, which is a better trade
+        // than rewriting a quarter of a million blocks to chase it.
+        await ClearAround(f, 56);
+        Build(f, brick: true);
+        LoadWares(f);
+        await Ticks(10);
+        await Light(f);
+        await Ticks(200);
+
+        // Aimed at the middle of the drum - the body runs away from the mouth, so the ground
+        // in front of the firebox is not where the mass is, and framing on it throws the kiln
+        // into the top right of the shot.
+        await Aim(P(35, 2, 26), P(40, 4, 18));
+        await HideHud();
+        await HideGuis();
+        Log("08 -> " + await Shot.Take(Out("08-brick-kiln-firing.png")));
+    }
+
+    /// <summary>
+    /// Both kilns in one frame, both lit. The whole point of the brick one is that it is the
+    /// same kiln in a different material, and a single shot says that better than two do —
+    /// same drum, same corbel, same plume, and a front face that has grown a wicket.
+    ///
+    /// Shot from far enough back to hold seventeen blocks of subject: the pair spans two 5-wide
+    /// drums twelve apart, and at the default field of view anything closer crops a kiln.
+    /// </summary>
+    [VsTest(TimeoutMs = 300000)]
+    [RequiresClient]
+    [PlotSize(48, 32)]
+    public async Task Shot09_MudAndBrickSideBySide()
+    {
+        await World.SetCalendarTo(500 * 24 + 10);
+        BlockPos mud = P(19, 1, 20);
+        BlockPos brick = P(29, 1, 20);
+        await ClearAround(P(24, 1, 20), 44);
+
+        Build(mud);
+        Build(brick, brick: true);
+        LoadWares(mud);
+        LoadWares(brick);
+        await Ticks(10);
+        await Light(mud);
+        await Light(brick);
+        await Ticks(220);
+
+        await Aim(P(24, 3, 31), P(24, 4, 18));
+        await HideHud();
+        await HideGuis();
+        Log("09 -> " + await Shot.Take(Out("09-mud-and-brick.png")));
+    }
+
+    /// <summary>
+    /// The wicket, close, in both of its states — luted on the left and standing open on the
+    /// right, which is what a firing leaves behind. Framed at ware height so the green wares
+    /// show on the grate through the open one.
+    ///
+    /// This is the shot that has to carry the copper: the strapping is two bands across a brick
+    /// panel, and at the distance shots 08 and 09 are taken from it is a few pixels.
+    /// </summary>
+    [VsTest(TimeoutMs = 300000)]
+    [RequiresClient]
+    [PlotSize(48, 32)]
+    public async Task Shot10_TheWicket()
+    {
+        await World.SetCalendarTo(500 * 24 + 10);      // the same morning as 08 and 09, and a blue sky rather than the haze hour 13 gives
+        BlockPos shut = P(20, 1, 20);
+        BlockPos open = P(28, 1, 20);
+        await ClearAround(P(24, 1, 20), 52);
+
+        Build(shut, brick: true);
+        Build(open, brick: true, sealIt: false);
+        LoadWares(shut);
+        LoadWares(open);
+        await Ticks(10);
+        await Light(shut);
+        await Ticks(200);
+
+        await Aim(P(24, 3, 28), P(24, 4, 19));
+        await HideHud();
+        await HideGuis();
+        Log("10 -> " + await Shot.Take(Out("10-wicket.png")));
     }
 
     /// <summary>
@@ -325,7 +455,7 @@ public class ModDbShots
     {
         BlockPos f = P(24, 1, 20);
         await World.SetCalendarTo(500 * 24 + hour);
-        ClearAround(f);
+        await ClearAround(f);
         Build(f);
         LoadWares(f);
         await Ticks(10);

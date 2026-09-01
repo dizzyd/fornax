@@ -20,5 +20,23 @@ Three things the shots need that a normal test run does not, and that the script
 - **Fog.** Distance haze washes the horizon out. It comes from the ambient manager, not a
   render setting, so it is overridden with an `AmbientModifier` at full weight.
 
+The brick kiln's shots (08-10) are appended rather than slotted in among the mud kiln's, so
+the numbering of a set already published on ModDB does not shift under it. 10 is the one that
+has to carry the copper: the wicket's strapping is a few pixels at the distance 08 and 09 are
+taken from, so it gets a close frame with one panel luted and one standing open.
+
 Plots sit `Plots.Spacing` (48) apart, so a plot of that size touches its neighbour and the
 previous test's blocks appear just past the boundary. The scenes clear well past the plot edge.
+
+**Generate the set in one unfiltered run.** Plots are handed out in execution order, so
+`--filter` moves a shot to a different plot, a different position in the world and therefore a
+different climate — and the grass photographs green in one run and dry khaki in the next with
+no code change at all. Shot 08 also asks for a `PlotSize` bigger than it needs, which is a
+cheaper way of keeping the neighbouring plot's kiln off the horizon than clearing far enough to
+swallow it; clearing that wide washes the grass out on its own.
+
+Only shots 08-10 are usable straight out of the run. The rest come out with the hotbar and stat
+bars showing and are cropped afterwards: `HideHud` closes dialogs, but the hotbar reopens
+itself, and only `Shot07`'s `HideGuis` (F4) turns it off for good — for the rest of the session,
+which is why everything after 07 is clean. The brick kiln's three call `HideGuis` themselves so
+they do not depend on that.

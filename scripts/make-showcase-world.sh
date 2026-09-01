@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Builds a savegame containing one updraft kiln per construction stage, and installs it
-# where <mod>/scripts/runClient.sh expects to find it.
+# Builds a savegame containing one updraft kiln per construction stage plus the finished
+# brick kiln shut and open, and installs it where <mod>/scripts/runClient.sh expects it.
 #
 #   bash scripts/make-showcase-world.sh
 #   bash scripts/make-showcase-world.sh --keep     # leave the build session running
@@ -92,6 +92,10 @@ case "$FOUND" in
     *kilnfirebox*) ;;
     *) echo "the saved world contains no kilns" >&2; exit 1 ;;
 esac
+case "$FOUND" in
+    *kilnbrickfirebox*) ;;
+    *) echo "the saved world contains no brick kiln" >&2; exit 1 ;;
+esac
 
 SRC="$BUILD_RUN/data/Saves/vstestkit.vcdbs"
 [ -f "$SRC" ] || { echo "no savegame produced at $SRC" >&2; exit 1; }
@@ -134,14 +138,19 @@ echo "installed: $DEST  ($(du -h "$DEST" | cut -f1))"
 # Note this installs the PACKAGED zip, not the build tree: runClient.sh gets the
 # mod's assets through --addOrigin, and Cairn has no equivalent, so a code-only
 # build tree would register no blocks at all.
+#
+# The zip is rebuilt every time, never reused. The world was just built against the
+# Debug tree, so it can contain blocks a stale zip has never heard of - and an unknown
+# block does not fail loudly, it renders as a question mark cube in a world that
+# otherwise looks fine. Reusing whatever was last left in Releases/ is exactly how the
+# brick kiln first showed up as a row of question marks.
 CAIRN="${CAIRN_CLI:-$HOME/src/cairn/artifacts/osx-arm64/cairn-cli}"
 if [ -x "$CAIRN" ] && [ "${NO_CAIRN:-0}" != "1" ]; then
+    echo "==> packaging the mod"
+    rm -rf "$MOD_ROOT/Releases" "$MOD_ROOT/fornax/bin/Release"
+    ( cd "$MOD_ROOT" && ./build.sh >/dev/null )
     ZIP="$(ls -t "$MOD_ROOT"/Releases/fornax_*.zip 2>/dev/null | head -1)"
-    if [ -z "$ZIP" ]; then
-        echo "==> no release zip; building one"
-        ( cd "$MOD_ROOT" && ./build.sh >/dev/null )
-        ZIP="$(ls -t "$MOD_ROOT"/Releases/fornax_*.zip 2>/dev/null | head -1)"
-    fi
+    [ -n "$ZIP" ] || { echo "build.sh produced no zip" >&2; exit 1; }
 
     PACK_ID="${PACK_ID:-fornax}"
     GAME_VERSION="$(basename "$VINTAGE_STORY" .app)"
@@ -152,6 +161,16 @@ if [ -x "$CAIRN" ] && [ "${NO_CAIRN:-0}" != "1" ]; then
     rm -f "$PACK_DIR"/Mods/fornax_*.zip
     cp "$ZIP" "$PACK_DIR/Mods/"
     install_world "$PACK_DIR/data/Saves/Updraft Kiln Stages.vcdbs"
+
+    # Cheap guard against the question-mark world: every fornax block the savegame was
+    # built out of has to be defined by the zip that ships beside it.
+    for want in kilnfirebox kilnbrickfirebox kilndoor kilngrate kilnseal kilnvent; do
+        unzip -l "$ZIP" | grep -q "blocktypes/$want.json" || {
+            echo "packaged mod has no blocktypes/$want.json - the showcase world would" >&2
+            echo "render it as a question mark cube" >&2
+            exit 1
+        }
+    done
 
     echo "cairn pack: $PACK_ID  ($(basename "$ZIP") + the showcase world)"
     echo

@@ -3,9 +3,11 @@ var ba = sapi.World.BlockAccessor;
 var spawn = sapi.World.DefaultSpawnPosition.AsBlockPos;
 
 var counts = new System.Collections.Generic.SortedDictionary<string,int>();
-int mud = 0, signs = 0, wareTiles = 0, litKilns = 0;
+int mud = 0, brick = 0, signs = 0, wareTiles = 0, litKilns = 0;
 
-for (int x = spawn.X - 40; x <= spawn.X + 40; x++) {
+// Wide enough for the whole row: nine kilns at a pitch of nine plus a gap is 76 blocks,
+// centred on spawn, so the far drum reaches about 40 out and the apron a little past that.
+for (int x = spawn.X - 48; x <= spawn.X + 48; x++) {
     for (int y = 1; y <= 12; y++) {
         for (int z = spawn.Z - 20; z <= spawn.Z + 6; z++) {
             var p = new Vintagestory.API.MathTools.BlockPos(x, y, z);
@@ -18,6 +20,7 @@ for (int x = spawn.X - 40; x <= spawn.X + 40; x++) {
                 var be = ba.GetBlockEntity(p) as Fornax.BlockEntityUpdraftFirebox;
                 if (be != null && be.Lit) litKilns++;
             } else if (b.Code.Path.StartsWith("mudbrick")) mud++;
+            else if (b.Code.Path.StartsWith("claybricks")) brick++;
             else if (b.Code.Path.StartsWith("sign-")) signs++;
 
             var gs = ba.GetBlockEntity(p) as Vintagestory.GameContent.BlockEntityGroundStorage;
@@ -28,6 +31,6 @@ for (int x = spawn.X - 40; x <= spawn.X + 40; x++) {
 
 var sb = new System.Text.StringBuilder();
 foreach (var kv in counts) sb.Append(kv.Key).Append('=').Append(kv.Value).Append(' ');
-sb.Append("mudbrick=").Append(mud).Append(" signs=").Append(signs)
+sb.Append("mudbrick=").Append(mud).Append(" claybricks=").Append(brick).Append(" signs=").Append(signs)
   .Append(" waretiles=").Append(wareTiles).Append(" lit=").Append(litKilns);
 return sb.ToString();
