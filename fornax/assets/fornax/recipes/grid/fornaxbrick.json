@@ -1,0 +1,60 @@
+[
+	{
+		"//": "The brick kiln's firebox. The same arrangement as the mud one with the shell course laid in fire clay brick instead of mud brick - the two parts the flame actually touches, this and the wicket, are fire clay either way; the 5x5 drum around them will take any fired brick.",
+		"ingredientPattern": "MMM,B_B,BBB",
+		"ingredients": {
+			"M": {
+				"type": "block",
+				"code": "game:claybricks-good-fire"
+			},
+			"B": {
+				"type": "item",
+				"code": "game:burnedbrick-*"
+			}
+		},
+		"width": 3,
+		"height": 3,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilnbrickfirebox-cold-north",
+			"quantity": 1
+		}
+	},
+	{
+		"//": "The wicket, two panels to a craft because the entrance is one block wide and two tall. Vanilla's own kiln door recipe with the metal list moved down a tier: the strapping and the pintles are on the outer face, where a thick brick panel keeps them a long way under the copper's melting point, so there is no reason this needs iron. Bronze is accepted on the same argument - tin bronze melts cooler than copper does, and neither is anywhere near the fire.",
+		"name": "Kiln wicket panel",
+		"ingredientPattern": "BR,BN,BR",
+		"ingredients": {
+			"B": {
+				"type": "item",
+				"code": "game:burnedbrick-fire",
+				"quantity": 4
+			},
+			"R": {
+				"type": "item",
+				"code": "game:rod-{metal}",
+				"quantity": 2
+			},
+			"N": {
+				"type": "item",
+				"code": "game:metalnailsandstrips-{metal}",
+				"quantity": 4
+			}
+		},
+		"allowedVariants": {
+			"metal": [
+				"copper",
+				"tinbronze",
+				"bismuthbronze",
+				"blackbronze"
+			]
+		},
+		"width": 2,
+		"height": 3,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilndoor-open-north",
+			"quantity": 2
+		}
+	}
+]

@@ -1,0 +1,127 @@
+{
+	"//": "The brick kiln's wicket. Two of these close the loading entrance; a bead of clay lutes each one shut, and the firing burns that luting out again. See BlockKilnDoor.",
+	"code": "kilndoor",
+	"class": "BlockKilnDoor",
+	"behaviors": [
+		{
+			"name": "HorizontalOrientable"
+		}
+	],
+	"variantgroups": [
+		{
+			"code": "state",
+			"states": [
+				"open",
+				"luted"
+			]
+		},
+		{
+			"code": "side",
+			"loadFromProperties": "game:abstract/horizontalorientation"
+		}
+	],
+	"attributes": {
+		"handbook": {
+			"groupBy": [
+				"kilndoor-open-*"
+			]
+		}
+	},
+	"shapeByType": {
+		"*-luted-north": { "base": "fornax:block/kilndoor-luted", "rotateY": 0 },
+		"*-luted-east": { "base": "fornax:block/kilndoor-luted", "rotateY": 270 },
+		"*-luted-south": { "base": "fornax:block/kilndoor-luted", "rotateY": 180 },
+		"*-luted-west": { "base": "fornax:block/kilndoor-luted", "rotateY": 90 },
+		"*-open-north": { "base": "fornax:block/kilndoor-open", "rotateY": 0 },
+		"*-open-east": { "base": "fornax:block/kilndoor-open", "rotateY": 270 },
+		"*-open-south": { "base": "fornax:block/kilndoor-open", "rotateY": 180 },
+		"*-open-west": { "base": "fornax:block/kilndoor-open", "rotateY": 90 }
+	},
+	"textures": {
+		"brick": {
+			"base": "game:block/clay/brick/four/running/fire1",
+			"alternates": [
+				{ "base": "game:block/clay/brick/four/running/fire2" },
+				{ "base": "game:block/clay/brick/four/running/fire3" },
+				{ "base": "game:block/clay/brick/four/running/fire4" }
+			]
+		},
+		"luting": {
+			"base": "game:block/clay/daub/brown/normal1",
+			"alternates": [
+				{ "base": "game:block/clay/daub/brown/normal2" },
+				{ "base": "game:block/clay/daub/brown/normal3" }
+			]
+		},
+		"metal": {
+			"base": "game:block/metal/riveted/copper3"
+		}
+	},
+	"//collision": "The swung panel stays inside the block's own bounds, so it needs no boxes of its own - only its collision taken away, which is what turns the wicket into a doorway to climb through. Selection is left as the full block: luting wants a target you can hit from anywhere in front of the kiln.",
+	"collisionboxByType": {
+		"*-open-*": null,
+		"*": { "x1": 0, "y1": 0, "z1": 0, "x2": 1, "y2": 1, "z2": 1 }
+	},
+	"blockmaterial": "Ceramic",
+	"creativeinventoryByType": {
+		"*-open-north": {
+			"general": [
+				"*"
+			],
+			"construction": [
+				"*"
+			]
+		},
+		"*": {}
+	},
+	"replaceable": 500,
+	"resistance": 3.5,
+	"lightAbsorptionByType": {
+		"*-luted-*": 99,
+		"*": 0
+	},
+	"sideopaqueByType": {
+		"*-luted-*": { "all": true },
+		"*": { "all": false }
+	},
+	"sidesolidByType": {
+		"*-luted-*": { "all": true },
+		"*": { "all": false }
+	},
+	"sounds": {
+		"walk": "game:walk/stone",
+		"place": "game:block/ceramicplace",
+		"break": "game:block/ceramicbreak",
+		"hit": "game:block/ceramicbreak"
+	},
+	"heldTpIdleAnimation": "holdbothhandslarge",
+	"heldRightReadyAnimation": "heldblockready",
+	"heldTpUseAnimation": "twohandplaceblock",
+	"materialDensity": 2400,
+	"guiTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0.5,
+			"z": 0.5
+		},
+		"rotation": {
+			"x": -22.6,
+			"y": -45.3,
+			"z": 0
+		},
+		"scale": 1.0
+	},
+	"tpHandTransform": {
+		"translation": {
+			"x": -1.23,
+			"y": -0.91,
+			"z": -0.8
+		},
+		"rotation": {
+			"x": -2,
+			"y": 25,
+			"z": -78
+		},
+		"scale": 0.4
+	}
+}

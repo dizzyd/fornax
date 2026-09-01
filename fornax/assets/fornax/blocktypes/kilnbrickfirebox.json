@@ -1,0 +1,2082 @@
+{
+	"code": "kilnbrickfirebox",
+	"class": "BlockUpdraftFirebox",
+	"entityClass": "UpdraftFirebox",
+	"behaviors": [
+		{
+			"name": "HorizontalOrientable"
+		}
+	],
+	"variantgroups": [
+		{
+			"code": "state",
+			"states": [
+				"cold",
+				"ready",
+				"warming",
+				"firing"
+			]
+		},
+		{
+			"code": "side",
+			"loadFromProperties": "game:abstract/horizontalorientation"
+		}
+	],
+	"attributes": {
+		"handbook": {
+			"groupBy": [
+				"kilnbrickfirebox-cold-*"
+			]
+		},
+		"multiblockStructure": {
+			"blockNumbers": {
+				"@(claybricks-good-.*|brickcourse-.*|refractorybricks-good-.*)": 1,
+				"fornax:kilngrate": 2,
+				"fornax:kilnbrickfirebox-*": 3,
+				"fornax:kilndoor-luted-*": 4,
+				"fornax:kilnvent-*": 5,
+				"fornax:chamber": 6
+			},
+			"offsets": [
+				{
+					"x": -2,
+					"y": 0,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 0,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 0,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 0,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 0,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 0,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 0,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 0,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 0,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 0,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 0,
+					"z": 0,
+					"w": 3
+				},
+				{
+					"x": 0,
+					"y": 0,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 0,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 0,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 0,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 0,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 0,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 0,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 0,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 0,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 0,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 0,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 0,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 0,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 0,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 1,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 1,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 1,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 1,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 1,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 1,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 1,
+					"z": -1,
+					"w": 2
+				},
+				{
+					"x": -1,
+					"y": 1,
+					"z": -2,
+					"w": 2
+				},
+				{
+					"x": -1,
+					"y": 1,
+					"z": -3,
+					"w": 2
+				},
+				{
+					"x": -1,
+					"y": 1,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 1,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 1,
+					"z": -1,
+					"w": 2
+				},
+				{
+					"x": 0,
+					"y": 1,
+					"z": -2,
+					"w": 2
+				},
+				{
+					"x": 0,
+					"y": 1,
+					"z": -3,
+					"w": 2
+				},
+				{
+					"x": 0,
+					"y": 1,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 1,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 1,
+					"z": -1,
+					"w": 2
+				},
+				{
+					"x": 1,
+					"y": 1,
+					"z": -2,
+					"w": 2
+				},
+				{
+					"x": 1,
+					"y": 1,
+					"z": -3,
+					"w": 2
+				},
+				{
+					"x": 1,
+					"y": 1,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 1,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 1,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 1,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 1,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 1,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 2,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 2,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 2,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 2,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 2,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 2,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 2,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 2,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 2,
+					"z": 0,
+					"w": 4
+				},
+				{
+					"x": 0,
+					"y": 2,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 2,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 2,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 2,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 2,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 2,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 2,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 2,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 2,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 2,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 2,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 2,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 3,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 3,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": -2,
+					"y": 3,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 3,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 3,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 3,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 3,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": -1,
+					"y": 3,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 3,
+					"z": 0,
+					"w": 4
+				},
+				{
+					"x": 0,
+					"y": 3,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 3,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 3,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 3,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 3,
+					"z": 0,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 3,
+					"z": -1,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 3,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 3,
+					"z": -3,
+					"w": 6
+				},
+				{
+					"x": 1,
+					"y": 3,
+					"z": -4,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 3,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 3,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 2,
+					"y": 3,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 4,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 4,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 4,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 4,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 4,
+					"z": -2,
+					"w": 6
+				},
+				{
+					"x": 0,
+					"y": 4,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 4,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 4,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 4,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 5,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 5,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": -1,
+					"y": 5,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 5,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 0,
+					"y": 5,
+					"z": -2,
+					"w": 5
+				},
+				{
+					"x": 0,
+					"y": 5,
+					"z": -3,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 5,
+					"z": -1,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 5,
+					"z": -2,
+					"w": 1
+				},
+				{
+					"x": 1,
+					"y": 5,
+					"z": -3,
+					"w": 1
+				}
+			]
+		}
+	},
+	"shapeByType": {
+		"*-north": {
+			"base": "fornax:block/firebox",
+			"rotateY": 0
+		},
+		"*-east": {
+			"base": "fornax:block/firebox",
+			"rotateY": 270
+		},
+		"*-south": {
+			"base": "fornax:block/firebox",
+			"rotateY": 180
+		},
+		"*-west": {
+			"base": "fornax:block/firebox",
+			"rotateY": 90
+		}
+	},
+	"texturesByType": {
+		"*-firing-*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/fire1",
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/fire2"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire3"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire4"
+					}
+				]
+			},
+			"inside": {
+				"base": "game:block/fire-orange"
+			}
+		},
+		"*-warming-*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/fire1",
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/fire2"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire3"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire4"
+					}
+				]
+			},
+			"inside": {
+				"base": "game:block/coal/ember"
+			}
+		},
+		"*-ready-*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/fire1",
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/fire2"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire3"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire4"
+					}
+				]
+			},
+			"inside": {
+				"base": "game:block/wood/firewood/side"
+			}
+		},
+		"*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/fire1",
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/fire2"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire3"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire4"
+					}
+				]
+			},
+			"inside": {
+				"base": "game:block/clay/ceramic-dark"
+			}
+		}
+	},
+	"lightHsvByType": {
+		"*-firing-*": [
+			7,
+			7,
+			18
+		],
+		"*-warming-*": [
+			2,
+			7,
+			11
+		],
+		"*": [
+			0,
+			0,
+			0
+		]
+	},
+	"vertexFlagsByType": {
+		"*-firing-*": {
+			"glowLevel": 190
+		},
+		"*-warming-*": {
+			"glowLevel": 110
+		},
+		"*": {
+			"glowLevel": 0
+		}
+	},
+	"particlePropertiesByType": {
+		"*-firing-north": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": -0.25,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.06
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": -0.15,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.12
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*-firing-south": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": 0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0.25,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.06
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": 0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": 0.15,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.12
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*-firing-east": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": 0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.25,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0.0,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.06
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.15,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": 0.0,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.12
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*-firing-west": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": -0.25,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0.0,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.06
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": -0.15,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": 0.0,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.12
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*": [
+			{
+				"//": "registration placeholder - emits nothing",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					}
+				],
+				"quantity": {
+					"avg": 0
+				},
+				"size": {
+					"avg": 0.1,
+					"var": 0
+				},
+				"lifeLength": {
+					"avg": 0.1
+				},
+				"particleModel": "Quad"
+			}
+		],
+		"*-warming-north": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": -0.25,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.012
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": -0.15,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.16
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*-warming-south": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": 0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0.25,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.012
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0.0,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": 0.55,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.0,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": 0.15,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.16
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*-warming-east": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": 0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.25,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0.0,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.012
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": 0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": 0.15,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": 0.0,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.16
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		],
+		"*-warming-west": [
+			{
+				"//": "embers spilling out of the firebox mouth",
+				"hsvaColor": [
+					{
+						"avg": 30,
+						"var": 20
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 50
+					},
+					{
+						"avg": 255,
+						"var": 0
+					}
+				],
+				"gravityEffect": {
+					"dist": "invexp",
+					"avg": -0.1,
+					"var": 0.4
+				},
+				"posOffset": [
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.62,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": -0.25,
+						"var": 0.1
+					},
+					{
+						"avg": 0.45,
+						"var": 0.1
+					},
+					{
+						"avg": 0.0,
+						"var": 0.1
+					}
+				],
+				"quantity": {
+					"avg": 0.012
+				},
+				"size": {
+					"avg": 0.35,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "quadratic",
+					"factor": -0.7
+				},
+				"lifeLength": {
+					"avg": 1.5
+				},
+				"vertexFlags": 128,
+				"windAffectednes": 0.2
+			},
+			{
+				"//": "smoke curling out of the mouth",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 70,
+						"var": 30
+					},
+					{
+						"avg": 220,
+						"var": 50
+					}
+				],
+				"opacityEvolve": {
+					"transform": "linear",
+					"factor": -255
+				},
+				"gravityEffect": {
+					"avg": 0,
+					"var": 0
+				},
+				"posOffset": [
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": -0.55,
+						"var": 0.12
+					},
+					{
+						"avg": 0.0,
+						"var": 0.12
+					}
+				],
+				"velocity": [
+					{
+						"avg": -0.15,
+						"var": 0.05
+					},
+					{
+						"avg": 0.3,
+						"var": 0.05
+					},
+					{
+						"avg": 0.0,
+						"var": 0.05
+					}
+				],
+				"quantity": {
+					"avg": 0.16
+				},
+				"size": {
+					"avg": 0.3,
+					"var": 0.05
+				},
+				"sizeEvolve": {
+					"transform": "linear",
+					"factor": 1.5
+				},
+				"particleModel": "Quad",
+				"lifeLength": {
+					"avg": 2.0
+				},
+				"windAffectednes": 0.7
+			}
+		]
+	},
+	"blockmaterial": "Ceramic",
+	"creativeinventoryByType": {
+		"*-cold-north": {
+			"general": [
+				"*"
+			],
+			"construction": [
+				"*"
+			]
+		},
+		"*": {}
+	},
+	"replaceable": 500,
+	"resistance": 4.5,
+	"lightAbsorption": 0,
+	"sideopaque": {
+		"all": false
+	},
+	"sidesolid": {
+		"all": false
+	},
+	"heldTpIdleAnimation": "holdbothhandslarge",
+	"heldRightReadyAnimation": "heldblockready",
+	"heldTpUseAnimation": "twohandplaceblock",
+	"sounds": {
+		"walk": "game:walk/stone",
+		"place": "game:block/ceramicplace",
+		"break": "game:block/ceramicbreak",
+		"hit": "game:block/ceramicbreak"
+	},
+	"guiTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0.5,
+			"z": 0.5
+		},
+		"rotation": {
+			"x": -22.6,
+			"y": -45.3,
+			"z": 0
+		},
+		"scale": 1.0
+	},
+	"tpHandTransform": {
+		"translation": {
+			"x": -1.23,
+			"y": -0.91,
+			"z": -0.8
+		},
+		"rotation": {
+			"x": -2,
+			"y": 25,
+			"z": -78
+		},
+		"scale": 0.4
+	},
+	"materialDensity": 2400,
+	"//": "The brick kiln: the same 5x5 drum and the same nine grate positions, laid in fired brick instead of mud, with a strapped wicket where the mud kiln has six seals. See BlockEntityUpdraftFirebox.IsBrickKiln for what differs once it is lit."
+}

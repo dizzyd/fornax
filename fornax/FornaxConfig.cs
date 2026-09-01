@@ -90,10 +90,44 @@ public class FornaxConfig
     public int ChamberMaxTemperature = 1200;
     public int ChamberHeatingPerHour = 450;
     public int ChamberCoolingPerHour = 300;
+
     [Category("Firing")]
     [Description("Temperature the chamber cools back down to.")]
     [Range(-50, 100)]
     public int AmbientTemperature = 20;
+
+    // --- the brick kiln ----------------------------------------------------
+    //
+    // The second shell material, and a deliberately sideways one. Fired brick laid in lime
+    // mortar is not a hotter kiln - common brick softens around the temperature it was fired
+    // at, and a cob shell self-fires on its inner face over its first few firings anyway, so
+    // both settle in the same earthenware range. The ceiling and the draft bonus are therefore
+    // shared, and so is the capacity: nine grate positions either way.
+    //
+    // What mortared brick actually buys is a shell that does not leak. Less parasitic cold air
+    // through the joints means more of the fuel reaches the wares, which is the one number
+    // below that moves in the kiln's favour. Against it, dense brick has more mass and conducts
+    // better than straw-tempered cob: it is slower to bring up to heat, and slower to let go of
+    // it afterwards. So the brick kiln is cheaper per firing and worse at a single firing -
+    // it wants to be run back to back, which is what a permanent kiln is for.
+
+    /// <summary>Fuel energy one firing costs in the brick kiln. See the note above.</summary>
+    [Category("Brick kiln")]
+    [Description("Fuel energy, in fuel-hours, that one complete firing costs in the brick kiln.")]
+    [Range(1, 300)]
+    public float BrickFiringEnergyHours = 48.0f;
+
+    /// <summary>The brick kiln's greater mass takes longer to bring up to temperature.</summary>
+    [Category("Brick kiln")]
+    [Description("Chamber warm-up per in-game hour in the brick kiln. Lower than the mud kiln: more mass to heat.")]
+    [Range(1, 2000)]
+    public int BrickChamberHeatingPerHour = 350;
+
+    /// <summary>And longer to let it go again, which is what makes back-to-back firings cheap.</summary>
+    [Category("Brick kiln")]
+    [Description("Chamber cooling per in-game hour in the brick kiln. Lower than the mud kiln: it holds its heat.")]
+    [Range(1, 2000)]
+    public int BrickChamberCoolingPerHour = 180;
 
     /// <summary>
     /// Fuel-hours forfeited when a firing is left unfinished and the chamber falls all the way

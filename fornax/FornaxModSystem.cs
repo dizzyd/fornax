@@ -147,6 +147,7 @@ public class FornaxModSystem : ModSystem
         base.Start(api);
 
         api.RegisterBlockClass("BlockUpdraftFirebox", typeof(BlockUpdraftFirebox));
+        api.RegisterBlockClass("BlockKilnDoor", typeof(BlockKilnDoor));
         api.RegisterBlockEntityClass("UpdraftFirebox", typeof(BlockEntityUpdraftFirebox));
 
         RegisterWithConfigLib(api);

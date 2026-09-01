@@ -38,12 +38,34 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     private const int WareLevel = 2;
     private const int VentLevel = 5;
 
+    /// <summary>First code part of the brick kiln's firebox, which is how the two are told apart.</summary>
+    public const string BrickFireboxCode = "kilnbrickfirebox";
+
     private readonly InventoryGeneric inventory;
     public override InventoryBase Inventory => inventory;
     public override string InventoryClassName => "updraftfirebox";
 
     /// <summary>Points from the firebox towards the chamber, i.e. the opposite of the mouth.</summary>
     public BlockFacing Orientation { get; private set; } = BlockFacing.NORTH;
+
+    /// <summary>
+    /// Which of the two kilns this firebox is the brain of.
+    ///
+    /// Read off the block code rather than surveyed from the shell, because the shell is not
+    /// the thing that decides: each firebox blocktype carries its own multiblockStructure, so a
+    /// brick firebox only ever completes over brick walls and a mud one only over mud. That
+    /// makes the block the whole answer, and spares this a walk of 66 wall positions on every
+    /// tick together with the question of what a shell of 65 mud and one brick ought to do.
+    /// </summary>
+    public bool IsBrickKiln { get; private set; }
+
+    // The three numbers the two kilns disagree about. See the note in FornaxConfig: mortared
+    // brick joints leak less, so a firing costs less; dense brick has more mass than straw
+    // tempered cob, so it is slower both to heat and to cool. Everything else - the temperature
+    // ceiling, the draft bonus, the capacity, what it will fire - the two kilns share.
+    private float FiringEnergyHours => IsBrickKiln ? Cfg.BrickFiringEnergyHours : Cfg.FiringEnergyHours;
+    private int ChamberHeatingPerHour => IsBrickKiln ? Cfg.BrickChamberHeatingPerHour : Cfg.ChamberHeatingPerHour;
+    private int ChamberCoolingPerHour => IsBrickKiln ? Cfg.BrickChamberCoolingPerHour : Cfg.ChamberCoolingPerHour;
 
     private MultiblockStructure structure;
 
@@ -110,6 +132,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
     private void InitOrientation()
     {
+        IsBrickKiln = Block?.FirstCodePart() == BrickFireboxCode;
+
         string side = Block?.Variant?["side"];
         var facing = side == null ? BlockFacing.SOUTH : BlockFacing.FromCode(side) ?? BlockFacing.SOUTH;
 
@@ -245,7 +269,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         ApplyChamberTemperatureToWares();
 
-        if (FiredEnergyHours >= Cfg.FiringEnergyHours)
+        if (FiredEnergyHours >= FiringEnergyHours)
         {
             FinishFiring();
             dirty = true;
@@ -330,7 +354,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (ChamberTemperature >= target) return false;
 
         float before = ChamberTemperature;
-        ChamberTemperature = Math.Min(target, ChamberTemperature + (float)(hoursPassed * Cfg.ChamberHeatingPerHour));
+        ChamberTemperature = Math.Min(target, ChamberTemperature + (float)(hoursPassed * ChamberHeatingPerHour));
         return Math.Abs(ChamberTemperature - before) > 0.01f;
     }
 
@@ -352,7 +376,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (ChamberTemperature <= Cfg.AmbientTemperature) return false;
 
         float before = ChamberTemperature;
-        ChamberTemperature = Math.Max(Cfg.AmbientTemperature, ChamberTemperature - (float)(hoursPassed * Cfg.ChamberCoolingPerHour));
+        ChamberTemperature = Math.Max(Cfg.AmbientTemperature, ChamberTemperature - (float)(hoursPassed * ChamberCoolingPerHour));
 
         if (ChamberTemperature <= Cfg.AmbientTemperature && FiredEnergyHours > 0)
         {
@@ -836,7 +860,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         BatchFired = true;
         ApplyLitAppearance();
 
-        CrackSeals();
+        OpenAfterFiring();
 
         Api.World.PlaySoundAt(new AssetLocation("game:sounds/block/ceramicplace"), Pos.X + 0.5, Pos.Y + 0.5, Pos.Z + 0.5, null, false, 24);
     }
@@ -876,18 +900,38 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return stack?.Resolve(Api.World, "fornax firing result", false) == true ? stack.ResolvedItemstack : null;
     }
 
-    /// <summary>Every firing destroys the mud seals; the entrance must be re-sealed for the next batch.</summary>
-    private void CrackSeals()
+    /// <summary>
+    /// A firing opens the kiln it just finished, which is a different act on each of the two.
+    ///
+    /// The mud kiln's entrance is six mud seals, and the fire destroys them - they go to their
+    /// cracked variant and have to be broken out and made again, twenty-four clay and six soil
+    /// a batch. That is the mud kiln's running cost and it is meant to be felt.
+    ///
+    /// The brick kiln's is two strapped panels luted shut with a bead of clay, exactly as a
+    /// potter lutes a wicket. The fire burns the luting out and the panels swing open; the
+    /// panels themselves are permanent. So the same event costs one clay a panel to undo rather
+    /// than a batch of seals, and leaves nothing to mine out - which is the point of building
+    /// the thing in brick.
+    /// </summary>
+    private void OpenAfterFiring()
     {
         var cracked = Api.World.GetBlock(new AssetLocation("fornax", "kilnseal-cracked"));
-        if (cracked == null) return;
 
         structure.WalkMatchingBlocks(Api.World, Pos, (block, pos) =>
         {
-            if (block.Code?.Domain == "fornax" && block.Code.Path == "kilnseal-intact")
+            if (block.Code?.Domain != "fornax") return;
+
+            if (cracked != null && block.Code.Path == "kilnseal-intact")
             {
                 Api.World.BlockAccessor.SetBlock(cracked.Id, pos);
+                return;
             }
+
+            if (!BlockKilnDoor.Is(block, BlockKilnDoor.LutedState)) return;
+
+            // By variant rather than by a fixed code: the panel keeps whichever way it faces.
+            var open = Api.World.GetBlock(block.CodeWithVariant("state", BlockKilnDoor.OpenState));
+            if (open != null) Api.World.BlockAccessor.SetBlock(open.Id, pos);
         });
 
         StructureComplete = false;
@@ -1230,8 +1274,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// <summary>
     /// What is wrong with the kiln, split by the kind of problem, because the three read
     /// completely differently to whoever is standing in front of it: a wall that was never
-    /// built, something left in the chamber that has to come out, and the six mud seals that
-    /// every firing cracks on purpose.
+    /// built, something left in the chamber that has to come out, and the entrance that every
+    /// firing opens on purpose - cracked mud seals, or panels whose luting has burned out.
     /// </summary>
     public StructureSurvey Survey()
     {
@@ -1241,7 +1285,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         {
             var have = Api.World.BlockAccessor.GetBlock(at);
 
-            if (have.Code?.Domain == "fornax" && have.Code.Path == "kilnseal-cracked")
+            if ((have.Code?.Domain == "fornax" && have.Code.Path == "kilnseal-cracked")
+                || BlockKilnDoor.Is(have, BlockKilnDoor.OpenState))
             {
                 survey.CrackedSeals++;
             }
@@ -1274,7 +1319,10 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         /// <summary>Positions inside the kiln filled by something solid.</summary>
         public int Obstructed;
 
-        /// <summary>Seals the last firing cracked. Not damage - that is how a kiln is opened.</summary>
+        /// <summary>
+        /// The entrance standing open after a firing: cracked mud seals on the mud kiln,
+        /// unluted panels on the brick one. Not damage - that is how a kiln is opened.
+        /// </summary>
         public int CrackedSeals;
 
         public BlockPos FirstObstruction;
@@ -1311,9 +1359,12 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         if (IsChamber(wanted)) return null;
         if (path.Contains("mudbrick") || path.Contains("cob")) return Api.World.GetBlock(new AssetLocation("game", "mudbrick-dark"));
+        if (IsBrickWall(path)) return Api.World.GetBlock(new AssetLocation("game", "claybricks-good-fire"));
+        if (path.Contains(BrickFireboxCode)) return Api.World.GetBlock(new AssetLocation("fornax", BrickFireboxCode + "-cold-north"));
         if (path.Contains("kilnfirebox")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnfirebox-cold-north"));
         if (path.Contains("kilnvent")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnvent-idle"));
         if (path.Contains("kilnseal")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnseal-intact"));
+        if (path.Contains(BlockKilnDoor.CodePart)) return Api.World.GetBlock(new AssetLocation("fornax", "kilndoor-luted-north"));
 
         // no wildcard: it names one block
         var exact = Api.World.GetBlock(wanted);
@@ -1333,13 +1384,27 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (IsChamber(wanted)) return ColorUtil.ColorFromRgba(215, 70, 70, 130);
 
         if (path.Contains("kilngrate")) return ColorUtil.ColorFromRgba(150, 200, 225, 55);
-        if (path.Contains("kilnseal")) return ColorUtil.ColorFromRgba(90, 130, 210, 55);
+        if (path.Contains("kilnseal") || path.Contains(BlockKilnDoor.CodePart)) return ColorUtil.ColorFromRgba(90, 130, 210, 55);
         if (path.Contains("kilnvent")) return ColorUtil.ColorFromRgba(140, 140, 160, 55);
-        if (path.Contains("kilnfirebox")) return ColorUtil.ColorFromRgba(240, 150, 60, 70);
-        if (path.Contains("mudbrick") || path.Contains("cob")) return ColorUtil.ColorFromRgba(120, 210, 120, 45);
+        if (path.Contains("firebox")) return ColorUtil.ColorFromRgba(240, 150, 60, 70);   // either kiln's
+        if (path.Contains("mudbrick") || path.Contains("cob") || IsBrickWall(path)) return ColorUtil.ColorFromRgba(120, 210, 120, 45);
 
         return ColorUtil.ColorFromRgba(200, 200, 200, 45);
     }
+
+    /// <summary>
+    /// Whether a structure requirement is the brick kiln's shell. Every fired clay or refractory
+    /// brick block vanilla ships is accepted, in any mix - the pattern in the blocktype is the
+    /// authority, and this only has to recognise it well enough to colour and to draw.
+    /// </summary>
+    private static bool IsBrickWall(string path) =>
+        path.Contains("claybricks") || path.Contains("brickcourse") || path.Contains("refractorybricks");
+
+    /// <summary>
+    /// "The firing is done, here is how you get at it" - which is not the same sentence twice.
+    /// One kiln wants six cracked seals broken out; the other has already opened itself.
+    /// </summary>
+    private string FiringDoneKey => IsBrickKiln ? "fornax:firing-done-brick" : "fornax:firing-done";
 
     /// <summary>Whether this kiln is the one whose guide is currently up. See <see cref="FornaxModSystem.GuideOwner"/>.</summary>
     private bool OwnsGuide => Api is ICoreClientAPI && Pos.Equals(FornaxModSystem.GuideOwner);
@@ -1451,7 +1516,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             // broken one. Still highlight them, since they are what has to be broken to unload.
             if (BatchFired && survey.OnlyCrackedSeals)
             {
-                capi.TriggerIngameError(this, "done", Lang.Get("fornax:firing-done"));
+                capi.TriggerIngameError(this, "done", Lang.Get(FiringDoneKey));
             }
             else if (survey.OnlyObstructions)
             {
@@ -1563,7 +1628,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         // count when something other than the seals is wrong with it too.
         if (BatchFired)
         {
-            dsc.AppendLine(Lang.Get("fornax:firing-done"));
+            dsc.AppendLine(Lang.Get(FiringDoneKey));
             if (missing > survey.CrackedSeals) dsc.AppendLine(Lang.Get("fornax:structure-incomplete", missing));
         }
         else if (survey.OnlyObstructions)
@@ -1613,7 +1678,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             // Only worth saying something when the fuel loaded will not see the batch out -
             // and not at all on a kiln still holding a finished one, where a shortfall for the
             // next firing reads as something having gone wrong with the last.
-            double needed = Math.Max(0, Cfg.FiringEnergyHours - FiredEnergyHours);
+            double needed = Math.Max(0, FiringEnergyHours - FiredEnergyHours);
             double have = FuelEnergyRemaining();
             if (have < needed && !BatchFired)
             {
@@ -1627,13 +1692,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         if (Lit)
         {
-            dsc.AppendLine(Lang.Get("fornax:lit", FiredEnergyHours, Cfg.FiringEnergyHours));
+            dsc.AppendLine(Lang.Get("fornax:lit", FiredEnergyHours, FiringEnergyHours));
         }
         else if (FiredEnergyHours > 0)
         {
             // A firing that ran out of fuel looks exactly like one that was never lit, right
             // down to the firebox going dark - and the hours banked in it are perishable.
-            dsc.AppendLine(Lang.Get("fornax:firing-paused", FiredEnergyHours, Cfg.FiringEnergyHours));
+            dsc.AppendLine(Lang.Get("fornax:firing-paused", FiredEnergyHours, FiringEnergyHours));
         }
         else if (missing == 0 && fuel > 0)
         {
