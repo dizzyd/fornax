@@ -5,15 +5,21 @@ early-game pit kiln and the late-game beehive kiln. Built from raw mud brick on 
 grate floor, fuelled with firewood or peat, and requiring **no iron at all** — so it lands squarely
 in the Copper and Bronze Age.
 
+There are two of it. The **mud kiln** is what you build first, out of what the ground gives you.
+The **brick kiln** is the same kiln laid in fired brick with a copper-strapped wicket, built out
+of what the first one fired — cheaper to run, slower to warm, and still no iron. See
+[The brick kiln](#the-brick-kiln).
+
 ## Why it exists
 
-|                  | pit kiln   | **updraft kiln** | beehive kiln |
-|------------------|------------|------------------|--------------|
-| wares per firing | 4          | **~36**          | ~108         |
-| fuel per firing  | 4 firewood | **30 firewood**  | up to 144 coal |
-| fuel per ware    | 1.0        | **0.83**         | ~1.3         |
-| firing time      | 20 h       | **8–13 h**       | 9 h          |
-| iron required    | no         | **no**           | yes (door)   |
+|                  | pit kiln   | **updraft, mud** | **updraft, brick** | beehive kiln |
+|------------------|------------|------------------|--------------------|--------------|
+| wares per firing | 4          | **~36**          | **~36**            | ~108         |
+| fuel per firing  | 4 firewood | **30 firewood**  | **24 firewood**    | up to 144 coal |
+| fuel per ware    | 1.0        | **0.83**         | **0.67**           | ~1.3         |
+| firing time      | 20 h       | **8–13 h**       | **8–13 h**         | 9 h          |
+| per-firing clay  | —          | **24 + 6 dirt**  | **2**              | none         |
+| metal required   | no         | **no**           | **copper**         | iron (door)  |
 
 The pit kiln figure is its four `fuel` build stages at one firewood each, plus 10 drygrass and
 8 sticks it also eats; a beehive kiln's is nine coal piles at `BlockEntityCoalPile.MaxStackSize`
@@ -47,7 +53,8 @@ The kiln is a 5x5 drum around a 3x3x4 chamber, four courses tall, that then **co
 
 The drum's four corners stop at grate level: the two courses above them are left open, so the
 shell reads as an octagon narrowing into the corbelled neck. The middle three blocks of the
-front wall at y=2 and y=3 are the mud seal.
+front wall at y=2 and y=3 are the mud seal. (The brick kiln is the same drum with a narrower
+entrance — see [The brick kiln](#the-brick-kiln).)
 
 That silhouette is the shape the kiln is *meant* to have, not a rule it enforces. The corner
 notches and the ring around the neck sit outside the sealed chamber, so the structure check
@@ -56,8 +63,102 @@ The nine chamber positions above the grate are checked, but only for being *clea
 that is not a solid cube is allowed to sit in there, which is what keeps the kiln working
 with whatever a mod invents to hold wares. See `IsChamberClear`.
 
-Shopping list: **66 mud brick or cob**, **9 kiln grate tiles**, **6 mud seals**, **1 firebox**,
-**1 draft vent**.
+Shopping list, mud kiln: **66 mud brick or cob**, **9 kiln grate tiles**, **6 mud seals**,
+**1 firebox**, **1 draft vent**.
+
+Shopping list, brick kiln: **70 fired brick blocks** (any clay or refractory brick, in any mix),
+**9 kiln grate tiles**, **2 wicket panels**, **1 brick firebox**, **1 draft vent**. Four more wall
+blocks than the mud kiln, because the narrower wicket turns four of the six seal positions into
+plain wall.
+
+## The brick kiln
+
+The same drum, the same nine grate positions, the same wares and the same temperatures — laid in
+fired brick instead of raw mud, with a strapped wicket where the mud kiln has six seals. A second
+firebox, `kilnbrickfirebox`, is what tells the two apart; it carries its own multiblock definition,
+so a brick firebox only ever completes over a brick shell and a mud one only over mud. There is no
+surveying of wall materials and no question of what a shell of 65 mud and one brick ought to do.
+
+### It is not a hotter kiln, and that is deliberate
+
+Common fired brick softens at about the temperature it was fired at, and a cob shell bakes its own
+inner face hard over its first few firings — after a season it *is* low-fired brick, in situ. Both
+settle in the same earthenware range, so the ceiling, the draft bonus and the capacity are shared.
+The material that genuinely raises a ceiling is refractory, and vanilla already puts that behind
+the beehive kiln. A brick kiln that fired hotter or bigger would simply replace the beehive one,
+and the point of this mod is the rung below it.
+
+What mortared brick actually buys is a shell that does not leak. Tight joints mean less cold air
+diluting the flame, so more of the fuel reaches the wares:
+
+| | mud | brick |
+|---|---|---|
+| fuel per firing | 60 fuel-hours (30 firewood) | **48** (24 firewood) |
+| chamber warm-up | 450 °C/h | **350 °C/h** |
+| chamber cooling | 300 °C/h | **180 °C/h** |
+
+The last two rows are the price. Dense brick has more mass than straw-tempered cob and conducts
+better, so there is more of it to bring up to heat — and more of it holding that heat afterwards.
+A brick kiln fired once and left is a worse kiln than a mud one. Fired batch after batch, the
+chamber never falls far enough to forfeit anything and the fuel saving is the whole story. That is
+what a permanent kiln is for.
+
+### The wicket
+
+The front wall's entrance narrows from a 3×2 face of mud seals to **one block wide and two tall**,
+closed by two **kiln wicket panels** — fire clay brick strapped in copper or bronze.
+
+```
+  mud kiln, front face      brick kiln, front face
+
+   y=3   ▒ ▒ ▒                y=3   ▓ ▐ ▓
+   y=2   ▒ ▒ ▒                y=2   ▓ ▐ ▓
+         ▓▓█▓▓                      ▓▓█▓▓
+
+  ▒ mud seal (consumed)      ▐ wicket panel (permanent)
+```
+
+The recipe is vanilla's own kiln door with the metal list moved down a tier:
+
+```
+  B R      B = 4 fireclay brick        metals: copper, tin bronze,
+  B N      R = 2 rod-{metal}                   bismuth bronze, black bronze
+  B R      N = 4 nails and strips       → 2 wicket panels
+```
+
+Copper melts at 1084 °C and the chamber runs to 1200, so copper *in* the chamber would be
+nonsense. The strapping and the pintles are on the **outer** face, where a thick brick panel keeps
+them a couple of hundred degrees at most — the brick takes the fire, the metal only holds the
+brick. Bronze is allowed on the same argument; tin bronze melts cooler than copper does and
+neither is anywhere near the flame.
+
+### Luting is the running cost
+
+The panels are permanent. What seals them is a bead of clay luted round the joint — right-click a
+panel with clay, one clay each — and the fire burns that luting out again, so a finished batch
+swings its own wicket open. Nothing to mine out and nothing to rebuild.
+
+| | per firing |
+|---|---|
+| mud kiln | 6 seals = 24 clay + 6 dirt, and six blocks to break |
+| brick kiln | 2 clay, and two right-clicks |
+
+Right-clicking a luted panel with an empty hand breaks the luting by hand, which is how you get
+into a kiln early — and costs exactly what prising a mud seal out costs, because the firebox sees
+an opened structure either way and applies the same thermal shock.
+
+Real potters lute a wicket before every firing; the luting burning through is what a finished
+firing looks like from outside. So the mechanic is not a concession, it is the thing itself — and
+it happens to be *less* tedious than the seals rather than more.
+
+### Where the bricks come from
+
+Nothing in the brick kiln needs iron, and the mud kiln makes most of it. Fired brick is
+`rawbrick` → pit kiln or mud kiln → `burnedbrick`, laid up with mortar; mortar is slaked lime and
+sand, and slaked lime is quicklime, which **this kiln already fires** (see [Lime](#lime)). So the
+first kiln fires the brick and the lime for the second one. That is not a designed loop so much as
+the order it happened in historically: the mud-brick kiln that made the fired brick for the
+permanent kiln that replaced it.
 
 ## What it fires
 
@@ -102,6 +203,9 @@ names is not a switch.
 | `RespectMaxFireable` | `false` | cap each pile at the ware's own vanilla `maxFireable`, as a pit kiln does — raw brick 12 rather than a full pile of 24. Off because tripling the fuel cost was the correction the kiln needed; this is the tighter version for anyone who wants it |
 | `GrantXSkillsExperience` | `true` | credit a firing to whoever lit the kiln, in XSkills' Pottery skill. Does nothing when XSkills is absent |
 | `XSkillsExperienceVsBeehiveKiln` | `0.75` | what a full firing here earns in that skill, against a full beehive kiln firing |
+| `BrickFiringEnergyHours` | `48` | fuel energy one firing costs in the **brick** kiln, against `FiringEnergyHours` 60 for the mud one |
+| `BrickChamberHeatingPerHour` | `350` | how fast the brick chamber warms, against 450 for mud — more mass to heat |
+| `BrickChamberCoolingPerHour` | `180` | and how fast it cools, against 300 — which is what makes back-to-back firings cheap |
 
 `FireContainersInChamber` turns on the **exact-type** check in `IsPlainGroundStorage`, and that
 subtlety is the whole reason the switch works: `BlockEntityKilnShelf` *derives from*
@@ -227,19 +331,25 @@ you have to load through; placement is overridden for this block.)
 | | costs |
 |---|---|
 | firebox | 5 fired bricks + 3 mud bricks |
+| brick firebox | 5 fired bricks + 3 fireclay brick blocks |
 | draft vent | 5 mud bricks |
 | mud seal | 4 clay + 1 dirt, each |
+| wicket panel ×2 | 12 fireclay bricks + 4 copper/bronze rods + 4 nails and strips |
 | grate tile ×3 | 8 clay, clay-formed over three layers, then pit-fired |
 
-The mud seals are the kiln's running cost — six per firing at 4 clay and a dirt block apiece, so
-**24 clay and 6 dirt per batch** on top of fuel. That is deliberate: the kiln's throughput and fuel
-economy are paid for in clay rather than firewood. Everything else is built once.
+The mud seals are the mud kiln's running cost — six per firing at 4 clay and a dirt block apiece,
+so **24 clay and 6 dirt per batch** on top of fuel. That is deliberate: the kiln's throughput and
+fuel economy are paid for in clay rather than firewood. Everything else is built once.
+
+The brick kiln pays that cost once, in copper, and then **2 clay a batch** to lute its wicket.
+See [Luting is the running cost](#luting-is-the-running-cost).
 
 ## Firing
 
 1. Place green pottery or raw bricks on the grate as ordinary ground storage — around 36 pieces
    of small pottery, or over 100 raw bricks.
-2. Close the loading entrance with six mud seals.
+2. Close the loading entrance: six mud seals on the mud kiln, or right-click each of the two
+   wicket panels with clay on the brick one.
 3. Right-click fuel into the firebox (ctrl-click for a whole stack), then light it.
 
    **A firestarter takes about four goes.** `ItemFirestarter` rolls a 25% chance every time you
@@ -288,11 +398,11 @@ temperature rather than only what touches the fire.
 through it faster.** The chimney draft adds 250 °C over what the fuel would manage in the open,
 which is what lets 700 °C firewood fire pottery at all.
 
-| fuel       | burn temp | pieces per batch | firing time |
-|------------|-----------|------------------|-------------|
-| firewood   | 700 °C    | 30               | ~13 h       |
-| peat brick | 900 °C    | 29               | ~8 h        |
-| charcoal   | 1300 °C   | 18               | ~6 h        |
+| fuel       | burn temp | per batch, mud | per batch, brick | firing time |
+|------------|-----------|----------------|------------------|-------------|
+| firewood   | 700 °C    | 30             | 24               | ~13 h       |
+| peat brick | 900 °C    | 29             | 24               | ~8 h        |
+| charcoal   | 1300 °C   | 18             | 15               | ~6 h        |
 
 Anything burning below 650 °C is refused, which `MinFuelBurnTemperature` moves. A mod that
 retunes fuel wants that: BTRO-Fuels puts firewood, brushwood, bamboo, sticks and dried peat all
@@ -309,7 +419,9 @@ shock shatters a share of the load. The chance per ware ramps from nothing at 45
 peak heat, so an early change of mind is free and a late one is expensive. Whatever survives keeps
 the heat it has already taken, so re-sealing resumes the firing where it left off.
 
-The mud seals crack in every firing and must be replaced. The shell itself lasts indefinitely.
+The mud seals crack in every firing and must be replaced. The brick kiln's wicket panels do not:
+the firing burns their luting out and they swing open, ready to be luted again for a clay apiece.
+Either shell itself lasts indefinitely.
 
 ## Configuration
 
