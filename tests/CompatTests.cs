@@ -392,6 +392,33 @@ public class CompatTests
     }
 
     /// <summary>
+    /// Puts the player's pottery experience back to zero, so a test that measures two firings
+    /// can measure them both from the same place.
+    ///
+    /// Experience is progress towards the next level, not a running total, so it drops when a
+    /// level is reached. Any test that subtracts two readings is therefore order-dependent:
+    /// measured, the four-slot firing above leaves the player at 36, a threshold sits at 40,
+    /// and the very next firing reads as negative. Zeroing first is what makes the comparison
+    /// mean anything regardless of what ran before it.
+    /// </summary>
+    private static bool TryResetPotteryExperience(IPlayer player)
+    {
+        var skillSet = player.Entity.GetBehavior("SkillSet");
+        var find = skillSet?.GetType().GetMethod("FindSkill", new[] { typeof(string), typeof(bool) });
+        var skill = find?.Invoke(skillSet, new object[] { "pottery", false });
+        var property = skill?.GetType().GetProperty("Experience");
+
+        if (property == null || !property.CanWrite)
+        {
+            Log("xskills' pottery Experience is not writable - skipping, this test needs a known baseline");
+            return false;
+        }
+
+        property.SetValue(skill, 0f);
+        return true;
+    }
+
+    /// <summary>
     /// A firing counts towards the Pottery skill, for whoever lit the kiln, at the rate the
     /// config asks for.
     ///
@@ -464,6 +491,102 @@ public class CompatTests
 
         Assert.Equal((float)expected, after - before,
             "a firing should be worth its configured fraction of a beehive kiln's, scaled by capacity");
+    }
+
+    /// <summary>
+    /// The brick kiln pays the same rate.
+    ///
+    /// XSkillsExperienceVsBeehiveKiln is scaled by *positions*, and both kilns have nine, so
+    /// the same pile in either should be worth exactly the same - a firing in the cheaper-to-run
+    /// kiln must not also be the better one to grind in. Nothing about that is guaranteed by
+    /// construction: XSkillsPottery.GrantFiring is handed whatever the firebox collected, and a
+    /// brick-specific rate could be introduced without a single other test noticing.
+    ///
+    /// Asserted against the mud kiln's actual payout rather than against the arithmetic, so this
+    /// keeps holding if the rate is retuned.
+    ///
+    /// The pile is deliberately small, and the skill is zeroed before each firing. XSkills'
+    /// Experience is progress towards the *next* level, not a running total, so it drops when a
+    /// level is reached - and a test that fires twice and subtracts reads the second firing as
+    /// negative when the level-up lands between them. Measured: two firings of the four-slot
+    /// pile the test above uses pay 36 each, cross a threshold at 40, and the second reads as
+    /// -4. Two occupied slots pay 9, and each is measured from a reset, so neither the pile nor
+    /// whatever ran earlier in the session can push a boundary between the two readings.
+    ///
+    /// Nine rather than any other number for a second reason: the rate is 0.75 x 27/9 = 2.25 per
+    /// slot-peer, and XSkills takes whole experience with the remainder carried across the batch.
+    /// A pile whose product is not a multiple of four leaves a different carry behind in each
+    /// kiln, and two payouts that are genuinely equal compare unequal. Two slots of two is four
+    /// slot-peers, which is exactly nine.
+    /// </summary>
+    [VsTest(TimeoutMs = 300000)]
+    [RequiresClient]
+    [PlotSize(32, 32)]
+    public async Task TheBrickKilnPaysTheSamePotteryExperience()
+    {
+        if (!NeedsXSkills()) return;
+
+        Assert.True(XSkillsPottery.Bound, "xskills is installed but the pottery hook did not resolve");
+
+        var player = Sapi.World.AllOnlinePlayers.FirstOrDefault();
+        Assert.NotNull(player, "this one needs a real player to credit");
+        Assert.True(FornaxModSystem.Config.GrantXSkillsExperience, "the switch is on by default and this test reads its rate");
+        if (!TryResetPotteryExperience(player)) return;
+
+        BlockPos mud = P(6, 1, 12);
+        BlockPos brick = P(20, 1, 12);
+
+        FornaxTests.Build(mud);
+        BrickKilnTests.Build(brick);
+        await Ticks(2);
+
+        // The same pile in each: one position, two occupied slots of two. See the note above
+        // for why it is two and not four.
+        foreach (var at in new[] { mud.AddCopy(0, 2, -2), brick.AddCopy(0, 2, -2) })
+        {
+            World.SetBlock("game:groundstorage", at);
+            await Ticks(1);
+            var storage = World.BE<BlockEntityGroundStorage>(at);
+            for (int i = 0; i < 2; i++)
+            {
+                storage.Inventory[i].Itemstack = World.Stack("game:rawbrick-blue", 2);
+                storage.Inventory[i].MarkDirty();
+            }
+            storage.MarkDirty(true);
+        }
+
+        async Task<float> Fire(BlockPos at)
+        {
+            var be = World.BE<BlockEntityUpdraftFirebox>(at);
+            be.Inventory[0].Itemstack = World.Stack("game:firewood", 32);
+            be.Inventory[0].MarkDirty();
+            for (int i = 0; i < 3; i++) await World.TickNow(at);
+
+            Assert.Equal(4, be.CountWares(), "two slots of two, both of them part of the batch");
+            Assert.True(be.CanIgnite, "a complete, fuelled kiln should be ignitable");
+
+            TryResetPotteryExperience(player);
+            float before = PotteryExperience(player);
+            be.TryIgnite(player.Entity);
+
+            for (int i = 0; i < 10 && be.Lit; i++)
+            {
+                await Hours(3);
+                for (int t = 0; t < 3; t++) await World.TickNow(at);
+            }
+
+            Assert.True(be.BatchFired, "the batch should have fired before anything is claimed about it");
+            return PotteryExperience(player) - before;
+        }
+
+        float paidByMud = await Fire(mud);
+        float paidByBrick = await Fire(brick);
+
+        Log($"the same pile: mud kiln paid {paidByMud}, brick kiln paid {paidByBrick}");
+        Assert.Greater(paidByMud, 0f, "the mud kiln should have paid something to compare against");
+        Assert.Greater(paidByBrick, 0f,
+            "a negative reading means a level-up landed between the two firings - shrink the pile");
+        Assert.Equal(paidByMud, paidByBrick, "both kilns hold nine positions, so both pay the same");
     }
 
     // ------------------------------------------------------------------

@@ -1516,7 +1516,10 @@ public class FornaxTests
             Assert.Equal(c.dz, (int)Math.Round(cz), $"a {c.side}-facing kiln should run its body along z");
         }
 
-        var cached = Sapi.ObjectCache.Keys.Where(k => k.StartsWith("fornax:multiblock-")).ToList();
+        // Keyed per firebox blocktype as well as per rotation, since the two kilns carry
+        // different definitions - so it is this firebox's four that are counted, not the cache
+        // as a whole, which also holds whatever the brick kiln's tests have been through.
+        var cached = Sapi.ObjectCache.Keys.Where(k => k.StartsWith("fornax:multiblock-kilnfirebox-")).ToList();
         Log("shared structures: " + string.Join(", ", cached));
         Assert.Equal(4, cached.Count, "one shared definition per rotation, not one per firebox");
     }
