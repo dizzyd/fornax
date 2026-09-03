@@ -32,11 +32,10 @@ namespace Fornax;
 /// </summary>
 public class FornaxConfig
 {
-    // The floating point settings here are float rather than double on purpose. ConfigLib 1.12.0
-    // classifies both as its "float" setting type and then unboxes the field value with a hard
-    // (float) cast, which throws InvalidCastException on a boxed double and takes the whole
-    // registration down with it - so a double field silently costs the GUI and the server sync.
-    // Every value here is small and exactly representable either way, so this costs nothing.
+    // These stay float because the values are small and exactly representable either way,
+    // not because they have to be: ConfigKit converts a boxed double, long or enum to the
+    // field's own type. ConfigLib cast instead, and a double field threw InvalidCastException
+    // that took the whole registration down with it.
 
     /// <summary>Fuel energy, in fuel-hours, that one complete firing consumes.</summary>
     [Category("Firing")]

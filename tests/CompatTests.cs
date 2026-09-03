@@ -345,13 +345,13 @@ public class CompatTests
     /// nothing to notice it by. This is what notices.
     /// </summary>
     [VsTest(TimeoutMs = 120000)]
-    public async Task ConfigLibTakesTheConfig()
+    public async Task ConfigKitTakesTheConfig()
     {
-        if (!Needs("configlib")) return;
+        if (!Needs("configkit")) return;
 
-        Log($"configlib present, bound = {FornaxModSystem.ConfigLibBound}");
-        Assert.True(FornaxModSystem.ConfigLibBound,
-            "configlib is installed but did not take the config - the reflection binding has drifted");
+        Log($"ConfigKit present, bound = {FornaxModSystem.ConfigKitBound}");
+        Assert.True(FornaxModSystem.ConfigKitBound,
+            "ConfigKit is installed but did not take the config - the reflection binding has drifted");
 
         await Ticks(1);
     }

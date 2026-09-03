@@ -1130,18 +1130,18 @@ public class FornaxTests
     /// what notices. Skips when ConfigLib is not installed, which is the ordinary case.
     /// </summary>
     [VsTest(TimeoutMs = 120000)]
-    public async Task ConfigLibTakesTheConfigWhenItIsInstalled()
+    public async Task ConfigKitTakesTheConfigWhenItIsInstalled()
     {
-        if (!Sapi.ModLoader.IsModEnabled("configlib"))
+        if (!Sapi.ModLoader.IsModEnabled("configkit"))
         {
-            Log("configlib is not installed - nothing to bind against, skipping");
+            Log("ConfigKit is not installed - nothing to bind against, skipping");
             await Ticks(1);
             return;
         }
 
-        Log($"configlib present, bound = {FornaxModSystem.ConfigLibBound}");
-        Assert.True(FornaxModSystem.ConfigLibBound,
-            "configlib is installed but did not take the config - the reflection binding has drifted");
+        Log($"ConfigKit present, bound = {FornaxModSystem.ConfigKitBound}");
+        Assert.True(FornaxModSystem.ConfigKitBound,
+            "ConfigKit is installed but did not take the config - the reflection binding has drifted");
 
         await Ticks(1);
     }

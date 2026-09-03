@@ -104,7 +104,7 @@ public class FornaxModSystem : ModSystem
     /// characters, and treats anything longer as the finished VTML - so handing it the already
     /// formatted string and re-running Init composes the interpolated text without a second
     /// lookup. The pages are built once with the handbook dialog, so a value changed mid-session
-    /// through ConfigLib shows up the next time the game loads rather than at once.
+    /// through ConfigKit shows up the next time the game loads rather than at once.
     /// </summary>
     public void FillInHandbookNumbers(List<GuiHandbookPage> pages)
     {
@@ -150,43 +150,43 @@ public class FornaxModSystem : ModSystem
         api.RegisterBlockClass("BlockKilnDoor", typeof(BlockKilnDoor));
         api.RegisterBlockEntityClass("UpdraftFirebox", typeof(BlockEntityUpdraftFirebox));
 
-        RegisterWithConfigLib(api);
+        RegisterWithConfigKit(api);
         XSkillsPottery.Resolve(api);
     }
 
-    private const string ConfigLibSystem = "ConfigLib.ConfigLibModSystem";
-    private const string ConfigLibRegister = "RegisterCustomManagedConfig";
+    private const string ConfigKitSystem = "ConfigKit.ConfigKitModSystem";
+    private const string ConfigKitRegister = "RegisterManagedConfig";
 
-    /// <summary>Whether ConfigLib is installed and took the config. Asserted in a test.</summary>
-    public static bool ConfigLibBound { get; private set; }
+    /// <summary>Whether ConfigKit is installed and took the config. Asserted in a test.</summary>
+    public static bool ConfigKitBound { get; private set; }
 
     /// <summary>
-    /// Hands <see cref="Config"/> to ConfigLib if it is installed.
+    /// Hands <see cref="Config"/> to ConfigKit if it is installed.
     ///
-    /// The visible half is an in-game settings GUI. The half that matters more is that ConfigLib
+    /// The visible half is an in-game settings GUI. The half that matters more is that ConfigKit
     /// syncs the server's values to every client before AssetsFinalize, which this mod does not
     /// do at all on its own - each side reads its own ModConfig file, so a server that has
     /// retuned the kiln has clients quoting it the untuned numbers.
     ///
-    /// Bound by reflection rather than a compile-time reference, so ConfigLib is optional when
+    /// Bound by reflection rather than a compile-time reference, so ConfigKit is optional when
     /// building this as well as when running it and nothing third-party has to live in the repo
     /// or the release zip. The usual objection to reflection does not weigh much here: the whole
-    /// surface is one method, and its callbacks are plain BCL delegates. RegisterCustomManagedConfig
+    /// surface is one method, and its callbacks are plain BCL delegates. RegisterManagedConfig
     /// reflects over the config object itself, so the [Description] and [Category] attributes on
     /// FornaxConfig are all the schema it needs - and those are BCL attributes too, inert when
-    /// ConfigLib is absent.
+    /// ConfigKit is absent.
     /// </summary>
-    private void RegisterWithConfigLib(ICoreAPI api)
+    private void RegisterWithConfigKit(ICoreAPI api)
     {
-        var system = api.ModLoader.GetModSystem(ConfigLibSystem);
+        var system = api.ModLoader.GetModSystem(ConfigKitSystem);
         if (system == null) return;   // not installed, which is the ordinary case
 
-        var register = system.GetType().GetMethod(ConfigLibRegister);
+        var register = system.GetType().GetMethod(ConfigKitRegister);
         if (register == null)
         {
-            api.Logger.Warning("[fornax] configlib is installed but has no {0} - " +
+            api.Logger.Warning("[fornax] ConfigKit is installed but has no {0} - " +
                 "the kiln's settings will not appear in its GUI and will not sync from the server.",
-                ConfigLibRegister);
+                ConfigKitRegister);
             return;
         }
 
@@ -202,13 +202,13 @@ public class FornaxModSystem : ModSystem
                 null,                                         // onConfigSaved
             });
 
-            ConfigLibBound = true;
+            ConfigKitBound = true;
         }
         catch (Exception e)
         {
             // Reflection wraps whatever went wrong inside the call in a TargetInvocationException
             // whose own message says nothing at all, so unwrap it or this is unactionable.
-            api.Logger.Warning("[fornax] could not hand the config to configlib: {0}",
+            api.Logger.Warning("[fornax] could not hand the config to ConfigKit: {0}",
                 (e as System.Reflection.TargetInvocationException)?.InnerException ?? e);
         }
     }
