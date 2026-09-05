@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Fornax;
 using Vintagestory.API.Common;
+using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Config;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
@@ -1725,6 +1726,133 @@ public class FornaxTests
         }
     }
 
+    private static float Health(Entity e) => e.WatchedAttributes.GetTreeAttribute("health").GetFloat("currenthealth");
+
+    private static Entity SpawnHare(BlockPos at)
+    {
+        // Any living EntityAgent with a health tree does; a hare is the smallest one in the game.
+        var type = Sapi.World.EntityTypes.First(t => t.Code.Domain == "game" && t.Code.Path.StartsWith("hare-") && t.Code.Path.Contains("-adult-"));
+        return World.SpawnEntity(type.Code.ToString(), at);
+    }
+
+    /// <summary>
+    /// A lit firebox burns whatever stands in front of its mouth, and shoves it back away from
+    /// the kiln. The shove is the point: nothing else in the game hurts you for standing near it -
+    /// not a firepit, not a beehive kiln - so the first a player learns of this is by walking up
+    /// to read the tooltip, and a warning written there arrives at the same moment as the damage.
+    /// Being shoved on the first hit is the one warning that lands before the second.
+    ///
+    /// The mouth faces south, so the shove has to be towards +z, and the safe distance the docs
+    /// quote - three blocks out - has to actually be safe.
+    ///
+    /// The firebox's real one-second listener keeps running underneath the forced tick, and a
+    /// hit grants half a second of invulnerability, so the forced tick may find the hare already
+    /// hit and be refused. Health is read at the spawn and the assertion is "hurt at least once",
+    /// which holds whichever tick got there first.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ALitFireboxBurnsAndShovesWhateverStandsInFrontOfIt()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 12);
+        Fuel("game:firewood", 30);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        be.TryIgnite(null);
+        await Tick3s();
+        Assert.True(be.Lit && be.StructureComplete, "the kiln should be firing");
+        Assert.True(be.BurnsBystanders, "the default config makes the mouth dangerous");
+
+        var inFront = SpawnHare(Fb().AddCopy(0, 0, 1));    // a block in front of the mouth
+        var wellBack = SpawnHare(Fb().AddCopy(0, 0, 3));   // three blocks out, where the docs say you are safe
+        float frontBefore = Health(inFront);
+        float backBefore = Health(wellBack);
+        double frontZ = inFront.ServerPos.Z;
+
+        try
+        {
+            await Ticks(2);
+            await World.TickNow(Fb());
+            await Ticks(6);
+
+            // The engine queues the shove ("dmgkb" = 1) off the hurt and physics consumes it into
+            // motion on its next pass. Headless, with no player near the plot, entity physics may
+            // not run at all, so the shove is accepted either still queued or already spent.
+            int queued = inFront.Attributes.GetInt("dmgkb");
+            double moved = inFront.ServerPos.Z - frontZ;
+
+            Log($"in front: {frontBefore} -> {Health(inFront)}, kbZ={inFront.WatchedAttributes.GetDouble("kbdirZ"):0.###}, " +
+                $"shove queued={queued}, moved {moved:0.##} along +z; three out: {backBefore} -> {Health(wellBack)}");
+
+            Assert.Less(Health(inFront), frontBefore, "a hare a block in front of the mouth should be burned");
+            Assert.Greater(inFront.WatchedAttributes.GetDouble("kbdirZ"), 0.0,
+                "and be shoved away from the kiln - the mouth faces +z, so the shove is towards +z");
+            Assert.True(queued == 1 || moved > 0, "the shove should be queued for physics, or already have moved it");
+            Assert.Equal(backBefore, Health(wellBack), "three blocks out is clear of the flames");
+        }
+        finally
+        {
+            inFront.Die(EnumDespawnReason.Removed);
+            wellBack.Die(EnumDespawnReason.Removed);
+        }
+    }
+
+    /// <summary>
+    /// The firebox says so when you look at it - while lit, and only while lit. A warning on a
+    /// cold firebox is noise; one missing from a hot one is the complaint that prompted this.
+    /// Switching the damage off in config takes the warning with it, or the tooltip would be
+    /// threatening something the kiln no longer does.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ALitFireboxWarnsYouToStandBack()
+    {
+        BuildKiln();
+        LoadWare(0, 0, "game:rawbrick-blue", 12);
+        Fuel("game:firewood", 30);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        var dsc = new System.Text.StringBuilder();
+        be.GetBlockInfo(null, dsc);
+        string warning = Lang.Get("fornax:firebox-hot", Cfg.FireboxBurnRadius);
+        Assert.True(!dsc.ToString().Contains(warning), "an unlit firebox has nothing to warn about");
+
+        be.TryIgnite(null);
+        await Tick3s();
+
+        dsc.Clear();
+        be.GetBlockInfo(null, dsc);
+        Log($"lit firebox says: {dsc}");
+        Assert.Contains(dsc.ToString(), warning);
+        Assert.Contains(warning, Cfg.FireboxBurnRadius.ToString("0.#") + " blocks", "quoting the configured reach, not a literal");
+
+        int damage = Cfg.FireboxBurnDamage;
+        try
+        {
+            Cfg.FireboxBurnDamage = 0;
+            Assert.True(!be.BurnsBystanders);
+
+            var hare = SpawnHare(Fb().AddCopy(0, 0, 1));
+            float before = Health(hare);
+            await Ticks(2);
+            await World.TickNow(Fb());
+            Assert.Equal(before, Health(hare), "with the damage switched off the mouth is harmless");
+            hare.Die(EnumDespawnReason.Removed);
+
+            dsc.Clear();
+            be.GetBlockInfo(null, dsc);
+            Assert.True(!dsc.ToString().Contains(Lang.Get("fornax:firebox-hot", Cfg.FireboxBurnRadius)),
+                "and the tooltip stops threatening it");
+        }
+        finally
+        {
+            Cfg.FireboxBurnDamage = damage;
+        }
+    }
+
 
     // ------------------------------------------------------------------
     //  Lighting it, the way a player actually does
@@ -2519,9 +2647,9 @@ public class FornaxTests
     }
 
     /// <summary>
-    /// The two numbers in the handbook that are settings rather than facts.
+    /// The three numbers in the handbook that are settings rather than facts.
     ///
-    /// They were written into the prose as literals, so a server that moved either had the page
+    /// They were written into the prose as literals, so a server that moved one had the page
     /// quoting it the default - and a player who reads "anything burning cooler than 650 degrees
     /// is refused" while the firebox happily takes 600 concludes the mod is broken, not the page.
     /// The placeholders are the fragile half: a translation that drops one, or a later edit that
@@ -2533,13 +2661,15 @@ public class FornaxTests
         string raw = Lang.GetUnformatted(FornaxModSystem.HandbookTextKey);
         Assert.Contains(raw, "{0}", "the fuel floor has to be a placeholder, not a literal");
         Assert.Contains(raw, "{1}", "and so does the shatter-safe temperature");
+        Assert.Contains(raw, "{2:0.#}", "and the reach of the flames in front of the mouth, formatted the way the tooltip formats it");
 
-        string filled = Lang.Get(FornaxModSystem.HandbookTextKey, 600, 400);
+        string filled = Lang.Get(FornaxModSystem.HandbookTextKey, 600, 400, 2.5f);
         Log($"handbook says: ...{filled.Substring(filled.IndexOf("cooler than"), 60)}...");
 
         Assert.Contains(filled, "cooler than 600 degrees is refused");
         Assert.Contains(filled, "nothing at 400 degrees");
-        Assert.True(!filled.Contains("{0}") && !filled.Contains("{1}"), "and nothing left unfilled");
+        Assert.Contains(filled, "about 2.5 blocks out from the mouth");
+        Assert.True(!filled.Contains("{0}") && !filled.Contains("{1}") && !filled.Contains("{2}"), "and nothing left unfilled");
         Assert.True(!filled.Contains("650 degrees"), "the default must not survive a changed config");
 
         await Ticks(1);

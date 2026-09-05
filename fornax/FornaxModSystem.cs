@@ -89,13 +89,14 @@ public class FornaxModSystem : ModSystem
     /// Puts the configured numbers into the handbook page, which otherwise states the defaults
     /// as fact.
     ///
-    /// Two of the page's numbers are settings - the fuel temperature floor and the temperature
-    /// below which opening the kiln is free - and they were written into the prose as literals.
-    /// Change either and the handbook goes on quoting the default, which is worse than saying
-    /// nothing: a player reads "anything burning cooler than 650 degrees is refused" on a server
-    /// that set 600 and concludes the mod is broken rather than that the page is.
+    /// Three of the page's numbers are settings - the fuel temperature floor, the temperature
+    /// below which opening the kiln is free, and how far the flames reach in front of the mouth -
+    /// and they were written into the prose as literals. Change one and the handbook goes on
+    /// quoting the default, which is worse than saying nothing: a player reads "anything burning
+    /// cooler than 650 degrees is refused" on a server that set 600 and concludes the mod is
+    /// broken rather than that the page is.
     ///
-    /// Only those two. The rest of the page's numbers are spelled out as words - thirty firewood,
+    /// Only those three. The rest of the page's numbers are spelled out as words - thirty firewood,
     /// about thirteen hours - because it reads better that way, and turning readable prose into
     /// digits to keep a rarely-changed default honest is a poor trade. The firebox itself reports
     /// its live numbers on every look, which is where a number that moves belongs.
@@ -114,7 +115,7 @@ public class FornaxModSystem : ModSystem
         {
             if (page is not GuiHandbookTextPage text || text.PageCode != HandbookPageCode) continue;
 
-            text.Text = Lang.Get(HandbookTextKey, Config.MinFuelBurnTemperature, Config.ShatterSafeTemperature);
+            text.Text = Lang.Get(HandbookTextKey, Config.MinFuelBurnTemperature, Config.ShatterSafeTemperature, Config.FireboxBurnRadius);
             text.Init(capi);
             return;
         }

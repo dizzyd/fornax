@@ -51,6 +51,11 @@ The firebox tells you what it is doing from across the yard: dark when empty, fi
 the mouth when fuelled, glowing red coals while the chamber warms, and bright orange flame once
 it is up to temperature. Look at it for hours of burn remaining and firing progress.
 
+Stand to the side while it burns. Unlike a firepit, the mouth of a lit firebox hurts: anything
+within about a block and a half in front of it is burned and shoved back away from the kiln. The
+firebox warns you when you look at it, the handbook says so too, and the reach, the damage and
+the shove are all settings. Keep animals clear of the front.
+
 THE BRICK KILN
 
 There are two of them. The mud kiln is what you build first, out of what the ground gives you.

@@ -1557,11 +1557,28 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (OwnsGuide) ReleaseGuide(byPlayer);
     }
 
+    /// <summary>Whether a lit firebox is dangerous to stand in front of at all, per config.</summary>
+    public bool BurnsBystanders => Cfg.FireboxBurnRadius > 0 && Cfg.FireboxBurnDamage > 0;
+
+    /// <summary>Where the flames come out: just in front of the block, at mid height.</summary>
+    public Vec3d MouthPosition => Pos.ToVec3d().Add(0.5, 0.5, 0.5)
+        .Add(Orientation.Opposite.Normali.X * 0.6, 0, Orientation.Opposite.Normali.Z * 0.6);
+
+    /// <summary>
+    /// Burns anything standing in front of the mouth, and shoves it back away from the kiln.
+    ///
+    /// The shove is the part that matters. Nobody expects a firebox to hurt - a firepit does
+    /// not, a beehive kiln does not - so the first anyone learns of it is when they walk up to
+    /// read the tooltip, and a warning in that tooltip arrives at the same moment as the damage.
+    /// Being shoved on the first hit is a warning that works without reading. The
+    /// direction comes from <see cref="DamageSource.SourcePos"/>: the engine pushes away from
+    /// it, so a source at the mouth pushes away from the kiln.
+    /// </summary>
     private void BurnNearbyEntities()
     {
-        var mouth = Pos.ToVec3d().Add(0.5, 0.5, 0.5)
-            .Add(Orientation.Opposite.Normali.X * 0.6, 0, Orientation.Opposite.Normali.Z * 0.6);
+        if (!BurnsBystanders) return;
 
+        var mouth = MouthPosition;
         var entities = Api.World.GetEntitiesAround(mouth, Cfg.FireboxBurnRadius, 2f, e => e.Alive && e is EntityAgent);
 
         foreach (var entity in entities)
@@ -1571,7 +1588,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                 DamageTier = 1,
                 SourcePos = mouth,
                 SourceBlock = Block,
-                Type = EnumDamageType.Fire
+                Type = EnumDamageType.Fire,
+                KnockbackStrength = Math.Max(0f, Cfg.FireboxBurnKnockback)   // a negative value would pull them in
             }, Cfg.FireboxBurnDamage);
         }
     }
@@ -1693,6 +1711,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (Lit)
         {
             dsc.AppendLine(Lang.Get("fornax:lit", FiredEnergyHours, FiringEnergyHours));
+
+            // Said on the block rather than only in the handbook, because the block is what
+            // a player is looking at when they walk into the flames.
+            if (StructureComplete && BurnsBystanders)
+            {
+                dsc.AppendLine(Lang.Get("fornax:firebox-hot", Cfg.FireboxBurnRadius));
+            }
         }
         else if (FiredEnergyHours > 0)
         {

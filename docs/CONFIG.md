@@ -44,7 +44,14 @@ you change how long a firing takes as well as what it costs.
 | `FiringGlowTemperature` | 450 | 0–2000 | Where the firebox stops looking like it is warming and starts looking like it is firing. |
 | `HeatSourceStrength` | 8 | 0–30 | Warmth given to nearby players while lit. A firepit is 10. |
 | `FireboxBurnRadius` | 1.5 | 0–8 | How far in front of the mouth the flames will burn you. |
-| `FireboxBurnDamage` | 2 | 0–20 | Damage the mouth deals. |
+| `FireboxBurnDamage` | 1 | 0–20 | Damage the mouth deals each second to anything standing in front of it. 0 switches the burn off, and the warning on the firebox with it. |
+| `FireboxBurnKnockback` | 3 | 0–10 | How hard the flames throw you back. A wolf bite is about 1.5; 0 leaves you standing in them. Only applies alongside damage. |
+
+The firebox's tooltip and the handbook quote these three from the **client's** copy of the
+config. Without ConfigKit a dedicated server's client sees its own file's values, so a server
+that changed them should tell its players, or install ConfigKit, which syncs them.
+`FireboxBurnDamage` was 2 before 1.7.0; a config file written by an earlier version keeps 2
+until you edit it.
 
 ## Fuel
 

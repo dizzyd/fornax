@@ -178,10 +178,28 @@ public class FornaxConfig
     [Range(0, 8)]
     public float FireboxBurnRadius = 1.5f;
 
+    /// <summary>
+    /// Damage the mouth deals, once a second, to anything standing in front of it. One, not
+    /// two: the knockback is what actually gets a player out of the flames, and at two a
+    /// player who stopped to read the firebox was dead in eight seconds.
+    /// </summary>
     [Category("Firing")]
-    [Description("Damage the firebox mouth deals.")]
+    [Description("Damage the firebox mouth deals each second to anything standing in front of it.")]
     [Range(0, 20)]
-    public int FireboxBurnDamage = 2;
+    public int FireboxBurnDamage = 1;
+
+    /// <summary>
+    /// How hard the flames throw a burned entity back. A wolf bite is about 1.5 (melee attacks
+    /// default to sqrt(damage / 4)); 3 is a clear shove away from the kiln rather than a flinch.
+    /// Nobody has measured whether one shove carries a player all the way out of the radius,
+    /// so the prose says "shoved back", not "thrown clear". Only applies
+    /// alongside damage - the engine queues the shove off the hurt, so at zero damage there is
+    /// no knockback either.
+    /// </summary>
+    [Category("Firing")]
+    [Description("How hard the flames throw you back. A wolf bite is about 1.5; 0 leaves you standing in them.")]
+    [Range(0, 10)]
+    public float FireboxBurnKnockback = 3f;
 
     /// <summary>Fuel slots in the firebox.</summary>
     [Category("Fuel")]

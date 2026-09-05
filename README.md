@@ -376,6 +376,14 @@ See [Luting is the running cost](#luting-is-the-running-cost).
    Look at it for the exact figures — hours of burn loaded, firing progress, chamber temperature.
    It only comments on the fuel when there is *not* enough to see the batch out.
 
+   **Stand to the side while it burns.** Unlike a firepit, the mouth of a lit firebox hurts:
+   anything within about 1.5 blocks in front of it — you or an animal — takes a point of fire
+   damage a second and is shoved back away from the kiln. Three blocks out is clear. The firebox
+   says so when you look at it, the handbook says so too, and all three numbers are settings
+   (`FireboxBurnRadius`, `FireboxBurnDamage`, `FireboxBurnKnockback`); a damage of 0 switches
+   the burn off and the warning with it. The damage was 2 before 1.7.0, and a config file
+   written by an earlier version keeps 2 until edited.
+
    **Once it is lit the firebox is sealed**: fuel can be neither added nor removed until the
    batch finishes. Load it before you light it. The vent swaps to a drafting variant
    carrying a smoke plume while it fires, and everything reverts when the batch is done.
