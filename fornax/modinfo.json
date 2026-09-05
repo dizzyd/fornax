@@ -6,7 +6,7 @@
         "Dave (Dizzy) Smith"
     ],
     "description": "A mid-game, multi-block updraft kiln that bridges the gap between the pit kiln and the beehive kiln. Built from raw mud brick with a pit-fired clay grate floor, or in fired brick with a copper-strapped wicket, fuelled with firewood or peat, and requiring no iron at all.",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "dependencies": {
         "game": "1.22.0"
     }
