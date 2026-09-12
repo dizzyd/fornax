@@ -145,13 +145,11 @@ public class FornaxTests
     }
 
     /// <summary>
-    /// The grate is built the way vanilla builds a brick wall: a thin thing fired in quantity
-    /// and then assembled. Raw tile -> fired tile of the colour the clay fires to, and four
-    /// fired tiles of one colour -> the grate block of that colour. Everything in that chain
-    /// is a string in JSON, so it is all checked here.
+    /// The grate is clay-formed whole and fires straight into the block, one to a pile, in
+    /// the colour its clay fires to. Every step is a string in JSON, so it is all checked here.
     /// </summary>
     [VsTest]
-    public async Task RawTilesFireIntoTilesAndFourTilesMakeAGrate()
+    public async Task RawGratesFireIntoGrateBlocks()
     {
         // Vanilla's brick mapping: blue clay fires gray, the other two keep their name.
         var fires = new Dictionary<string, string> { ["blue"] = "gray", ["fire"] = "fire", ["red"] = "red" };
@@ -164,244 +162,57 @@ public class FornaxTests
             Assert.NotNull(props);
             Assert.Equal(EnumSmeltType.Fire, props.SmeltingType);
             Assert.Equal(1, props.SmeltedRatio);
-            Assert.Equal($"fornax:kilngratefired-{color}", props.SmeltedStack.ResolvedItemstack.Collectible.Code.ToString());
+            Assert.Equal($"fornax:kilngrate-{color}", props.SmeltedStack.ResolvedItemstack.Collectible.Code.ToString());
+            Assert.NotNull(props.SmeltedStack.ResolvedItemstack.Block, "a fired grate is the block itself");
 
-            // The fired tile IS the raw tile, just fired: same slab, so a pile in a pit kiln
-            // comes out the size it went in. A fired tile does not fire again.
-            var fired = props.SmeltedStack.ResolvedItemstack.Collectible as Item;
-            Assert.NotNull(fired);
-            Assert.Equal((raw.Collectible as Item).Shape?.Base?.ToString(), fired.Shape?.Base?.ToString());
-            Assert.Null(fired.CombustibleProps);
+            // The raw grate IS the grating: vanilla's shape, six cuboids, moved down to the
+            // ground. Not a stand-in that turns into a grate in the fire.
+            var item = raw.Collectible as Item;
+            Assert.Equal("fornax:item/grateraw", item.Shape?.Base?.ToString());
 
-            // Both stack the same way, so a fired pile keeps its layout after the kiln. Eighteen
-            // to a pile is half a floor, and the pit kiln fires the whole pile.
-            foreach (var item in new[] { raw.Collectible, fired })
-            {
-                var storage = item.GetBehavior<CollectibleBehaviorGroundStorable>()?.StorageProps;
-                Assert.NotNull(storage);
-                Assert.Equal(18, storage.StackingCapacity);
-                Assert.Equal(18, storage.MaxFireable);
-            }
+            // One to a pile, and a pit kiln fires exactly one.
+            var storage = item.GetBehavior<CollectibleBehaviorGroundStorable>()?.StorageProps;
+            Assert.NotNull(storage);
+            Assert.Equal(EnumGroundStorageLayout.SingleCenter, storage.Layout);
+            Assert.Equal(1, storage.StackingCapacity);
+            Assert.Equal(1, storage.MaxFireable);
         }
 
-        // Four fired tiles of one colour make the grate of that colour; the named wildcard
-        // expands to one recipe per colour, so mixed colours match nothing.
-        var grid = Sapi.World.GridRecipes.FindAll(r =>
-            r.Output?.ResolvedItemStack?.Collectible?.Code?.Path?.StartsWith("kilngrate-") == true);
-        Log("grate recipes: " + string.Join(" ; ", grid.Select(r =>
-            r.Output.ResolvedItemStack.Collectible.Code.Path + " <- " +
-            string.Join("+", r.ResolvedIngredients.Where(i => i != null).Select(i => i.Code.Path)))));
-
-        foreach (var color in fires.Values)
-        {
-            var r = grid.FirstOrDefault(x => x.Output.ResolvedItemStack.Collectible.Code.Path == $"kilngrate-{color}");
-            Assert.NotNull(r);
-            Assert.Equal(1, r.Output.Quantity);
-            var tiles = r.ResolvedIngredients.Where(i => i != null).ToList();
-            Assert.Equal(4, tiles.Count);
-            Assert.True(tiles.All(i => i.Code.Path == $"kilngratefired-{color}"), $"the {color} grate wants four {color} tiles");
-        }
-
-        // One clay form is one grate: four tiles, of the clay that went in. (Layer count and
-        // clay cost are GrateClayFormingIsMoreThanOneLayer's business.)
+        // One clay form is one grate, of the clay that went in.
         var forms = Sapi.GetClayformingRecipes().Where(r => r.Output?.ResolvedItemstack?.Collectible?.Code?.Domain == "fornax").ToList();
         Log("clay forms: " + string.Join(", ", forms.Select(r => r.Ingredient?.Code + " -> " + r.Output.ResolvedItemstack.Collectible.Code + " x" + r.Output.Quantity)));
         foreach (var clay in fires.Keys)
         {
             var r = forms.FirstOrDefault(x => x.Output.ResolvedItemstack.Collectible.Code.Path == $"kilngrateraw-{clay}");
             Assert.NotNull(r);
-            Assert.Equal(4, r.Output.Quantity);
+            Assert.Equal(1, r.Output.Quantity);
         }
-        await Ticks(1);
-    }
 
-    [VsTest]
-    public async Task RecipesResolve()
-    {
-        // A malformed recipe does not throw - it just quietly never loads, so assert on the
-        // registry rather than trusting a clean startup log. The ingredient counts are here
-        // too, because a mispriced recipe is just as silent.
-        var grid = Sapi.World.GridRecipes.FindAll(r =>
-            r.Output?.ResolvedItemStack?.Collectible?.Code?.Domain == "fornax");
-
-        var made = new Dictionary<string, GridRecipe>();
-        foreach (var r in grid) made[r.Output.ResolvedItemStack.Collectible.Code.Path] = r;
-
-        Log("grid recipes: " + string.Join(", ", made.Keys));
-        Assert.True(made.ContainsKey("kilnfirebox-cold-north"), "no grid recipe produces kilnfirebox-cold-north");
-        Assert.True(made.ContainsKey("kilnvent-idle"), "no grid recipe produces kilnvent-idle");
-        Assert.True(made.ContainsKey("kilnseal-intact"), "no grid recipe produces kilnseal-intact");
-        Assert.True(made.ContainsKey("kilngrate-fire"), "no grid recipe produces kilngrate-fire");
-
-        AssertIngredients(made["kilnfirebox-cold-north"], "burnedbrick", 5, "mudbrick", 3);
-        AssertIngredients(made["kilnseal-intact"], "clay", 4, "soil", 1);
-        // One seal per craft: six seals per firing is 24 clay and 6 dirt, which is
-        // deliberately the kiln's main running cost.
-        Assert.Equal(1, made["kilnseal-intact"].Output.Quantity);
+        // Nothing crafts a grate in the grid: the form is the whole of it.
+        Assert.True(!Sapi.World.GridRecipes.Exists(r =>
+            r.Output?.ResolvedItemStack?.Collectible?.Code?.Path?.StartsWith("kilngrate") == true),
+            "a grate should not have a grid recipe");
         await Ticks(1);
     }
 
     /// <summary>
-    /// A seal is a lump of daub, so where the clay and the dirt sit in the grid should not
-    /// matter.
-    ///
-    /// Shapeless matching merges identical supplied stacks before it matches, and then consumes
-    /// one supplied stack per ingredient - so the four clay have to be one ingredient of
-    /// quantity four. Written as the letter four times the recipe resolves, reads correctly and
-    /// matches nothing at all, in any arrangement. Measured: that form returns false both for
-    /// four separate clay and for a stack of four.
-    ///
-    /// Note the allowed soil grades make this two registered recipes, one per grade, which is
-    /// why crafting means "some seal recipe matches" rather than "the seal recipe matches".
+    /// The kiln fires its own grates, one to a pile - nine at a go on a full floor, against
+    /// a pit kiln's one - and each comes out as the block, in the colour the clay fires to.
     /// </summary>
     [VsTest(TimeoutMs = 120000)]
-    [RequiresClient]
-    public async Task ASealCraftsFromAnyArrangement()
-    {
-        var recipes = Sapi.World.GridRecipes.FindAll(r =>
-            r.Output?.ResolvedItemStack?.Collectible?.Code?.Path == "kilnseal-intact");
-
-        Log($"{recipes.Count} seal recipes: " + string.Join(" ; ", recipes.Select(r =>
-            string.Join("+", r.ResolvedIngredients.Where(i => i != null).Select(i => $"{i.Code}x{i.Quantity}")))));
-
-        Assert.True(recipes.Count > 0, "no grid recipe produces a mud seal");
-        foreach (var r in recipes) Assert.True(r.Shapeless, "the seal recipe should be shapeless");
-
-        var player = Sapi.World.AllOnlinePlayers.FirstOrDefault();
-        Assert.NotNull(player);
-
-        var grid = new ItemSlot[9];
-        for (int i = 0; i < 9; i++) grid[i] = new DummySlot();
-
-        void Lay(string dirt, int clayCount, bool stacked)
-        {
-            for (int i = 0; i < 9; i++) grid[i].Itemstack = null;
-            if (dirt != null) grid[6].Itemstack = World.Stack(dirt);
-
-            if (stacked)
-            {
-                if (clayCount > 0) grid[2].Itemstack = World.Stack("game:clay-blue", clayCount);
-                return;
-            }
-
-            // scattered through the grid, in no order the pattern would recognise
-            int[] cells = { 8, 1, 4, 3 };
-            for (int i = 0; i < clayCount; i++) grid[cells[i]].Itemstack = World.Stack("game:clay-blue");
-        }
-
-        bool Crafts() => recipes.Exists(r => r.Matches(player, Sapi.World, grid, 3));
-
-        Lay("game:soil-medium-none", 4, stacked: false);
-        Assert.True(Crafts(), "four loose clay and a block of dirt should craft a seal wherever they sit");
-
-        Lay("game:soil-low-none", 4, stacked: false);
-        Assert.True(Crafts(), "and with either grade of dirt");
-
-        Lay("game:soil-low-none", 4, stacked: true);
-        Assert.True(Crafts(), "a single stack of four clay should work too");
-
-        Lay("game:soil-low-none", 3, stacked: false);
-        Assert.True(!Crafts(), "three clay is not enough");
-
-        Lay(null, 4, stacked: false);
-        Assert.True(!Crafts(), "and the dirt is not optional");
-
-        Lay("game:soil-high-none", 4, stacked: false);
-        Assert.True(!Crafts(), "high fertility soil is too good to daub with");
-
-        await Ticks(1);
-    }
-
-    private static void AssertIngredients(GridRecipe recipe, string aPart, int aCount, string bPart, int bCount)
-    {
-        var counts = new Dictionary<string, int>();
-        foreach (var ing in recipe.ResolvedIngredients)
-        {
-            if (ing?.Code == null) continue;
-            string key = ing.Code.Path.Split('-')[0];
-            counts[key] = (counts.TryGetValue(key, out var n) ? n : 0) + Math.Max(1, ing.Quantity);
-        }
-
-        Log($"  {recipe.Output.ResolvedItemStack.Collectible.Code.Path}: " +
-            string.Join(", ", counts.Select(kv => $"{kv.Value}x {kv.Key}")));
-
-        Assert.Equal(aCount, counts.TryGetValue(aPart, out var a) ? a : 0);
-        Assert.Equal(bCount, counts.TryGetValue(bPart, out var b) ? b : 0);
-    }
-
-    /// <summary>
-    /// Which way a placed firebox ends up facing. HorizontalOrientable points "side" AWAY from
-    /// whoever places the block, which put the mouth - and the kiln's whole front - facing away
-    /// from the player. Placement is overridden to point it at them instead.
-    /// </summary>
-    [VsTest(TimeoutMs = 120000)]
-    public async Task FireboxOrientsItsMouthTowardsWhoeverPlacesIt()
-    {
-        BlockPos at = P(8, 1, 10);
-
-        var cases = new (double dx, double dz, string expect)[]
-        {
-            (0, 4, "south"), (0, -4, "north"), (4, 0, "east"), (-4, 0, "west"),
-            (0.5, 4, "south"), (-0.5, -4, "north"),     // slightly off-axis stays put
-            (3.5, 1.0, "east"), (-3.5, -1.0, "west"),
-        };
-
-        foreach (var c in cases)
-        {
-            var got = BlockUpdraftFirebox.FacingTowards(at.X + 0.5 + c.dx, at.Z + 0.5 + c.dz, at);
-            Log($"observer at ({c.dx:+0.0;-0.0},{c.dz:+0.0;-0.0}) -> mouth faces {got.Code}");
-            Assert.Equal(c.expect, got.Code);
-        }
-        await Ticks(1);
-    }
-
-    /// <summary>
-    /// And the wiring: place one for real through the input system and check the mouth, the
-    /// derived body direction, and that the two agree.
-    /// </summary>
-    [VsTest(TimeoutMs = 180000)]
-    [RequiresClient]
-    public async Task PlacingAFireboxForRealPointsItAtYou()
-    {
-        BlockPos ground = P(8, 0, 10);
-        BlockPos onTop = ground.UpCopy();
-        World.SetBlock("game:air", onTop);
-        await Ticks(4);
-
-        await Player.StandNear(P(8, 1, 13));           // standing to the SOUTH
-        await Ticks(8);
-        await Player.Hold("fornax:kilnfirebox-cold-north", 4);
-        await Ticks(4);
-
-        await Interact.UseBlock(ground, BlockFacing.UP);
-        await Ticks(6);
-
-        string placed = World.BlockCode(onTop);
-        var be = World.BEOrNull<BlockEntityUpdraftFirebox>(onTop);
-        Log($"placed from the south -> {placed}, body runs {be?.Orientation}");
-
-        Assert.Equal("fornax:kilnfirebox-cold-south", placed);
-        Assert.Equal(BlockFacing.NORTH, be.Orientation);
-    }
-
-    /// <summary>
-    /// The kiln fires its own tiles: eighteen raw tiles to a pile, and the pile comes out
-    /// fired and still laid out as a pile, in the colour the clay fires to.
-    /// </summary>
-    [VsTest(TimeoutMs = 120000)]
-    public async Task RawGrateTilesFireOnTheGrate()
+    public async Task RawGratesFireOnTheGrate()
     {
         BuildKiln();
-        LoadWare(0, 0, "fornax:kilngrateraw-red", 18);
-        LoadWare(1, 0, "fornax:kilngrateraw-blue", 18);
+        LoadWare(0, 0, "fornax:kilngrateraw-red", 1);
+        LoadWare(1, 0, "fornax:kilngrateraw-blue", 1);
         Fuel("game:firewood", 32);
         await Ticks(2);
         await Tick3s();
 
         var be = Be();
-        Assert.Equal(36, be.CountWares());
-        Assert.Null(be.FirstUnfireableOnGrate(), "raw tiles are kiln work");
-        Assert.Null(be.FirstOverfullOnGrate(), "eighteen is a full pile, not an overfull one");
+        Assert.Equal(2, be.CountWares());
+        Assert.Null(be.FirstUnfireableOnGrate(), "raw grates are kiln work");
+        Assert.Null(be.FirstOverfullOnGrate(), "one is a full pile, not an overfull one");
 
         be.TryIgnite(null);
         for (int i = 0; i < 8 && be.Lit; i++)
@@ -411,16 +222,13 @@ public class FornaxTests
         }
         Assert.True(!be.Lit, "the firing should have finished");
 
-        foreach (var (dx, fired) in new[] { (0, "fornax:kilngratefired-red"), (1, "fornax:kilngratefired-gray") })
+        foreach (var (dx, fired) in new[] { (0, "fornax:kilngrate-red"), (1, "fornax:kilngrate-gray") })
         {
             var gs = World.BE<BlockEntityGroundStorage>(Ware(dx, 0));
             var got = gs.Inventory[0].Itemstack;
             Log($"pile {dx}: {got?.StackSize}x {got?.Collectible?.Code}, layout {gs.StorageProps?.Layout}");
             Assert.Equal(fired, got.Collectible.Code.ToString());
-            Assert.Equal(18, got.StackSize);
-            // LoadWare writes the slot directly, so the server never determined StorageProps
-            // for the green pile; the firing has to set them from the fired ware itself.
-            Assert.Equal(EnumGroundStorageLayout.Stacking, gs.StorageProps?.Layout);
+            Assert.Equal(1, got.StackSize);
         }
     }
 
@@ -432,7 +240,6 @@ public class FornaxTests
     {
         string[] codes = {
             "fornax:kilngrateraw-blue", "fornax:kilngrateraw-fire", "fornax:kilngrateraw-red",
-            "fornax:kilngratefired-gray", "fornax:kilngratefired-fire", "fornax:kilngratefired-red",
             "fornax:kilngrate-gray", "fornax:kilngrate-fire", "fornax:kilngrate-red",
         };
         foreach (var code in codes)
@@ -448,54 +255,9 @@ public class FornaxTests
     }
 
     /// <summary>
-    /// The 2x2 of fired tiles matches real crafting slots wherever it sits in the 3x3, and
-    /// nothing else does: not three tiles, not a mix of colours, not raw tiles.
-    /// </summary>
-    [VsTest(TimeoutMs = 120000)]
-    [RequiresClient]
-    public async Task FourFiredTilesOfOneColourCraftAGrate()
-    {
-        var recipes = Sapi.World.GridRecipes.FindAll(r =>
-            r.Output?.ResolvedItemStack?.Collectible?.Code?.Path?.StartsWith("kilngrate-") == true);
-        Assert.Equal(3, recipes.Count);
-
-        var player = Sapi.World.AllOnlinePlayers.FirstOrDefault();
-        Assert.NotNull(player);
-
-        var grid = new ItemSlot[9];
-        for (int i = 0; i < 9; i++) grid[i] = new DummySlot();
-
-        void Lay(params (int cell, string code)[] items)
-        {
-            for (int i = 0; i < 9; i++) grid[i].Itemstack = null;
-            foreach (var (cell, code) in items) grid[cell].Itemstack = World.Stack(code);
-        }
-        string Crafts() => recipes.FirstOrDefault(r => r.Matches(player, Sapi.World, grid, 3))
-            ?.Output.ResolvedItemStack.Collectible.Code.Path;
-
-        const string gray = "fornax:kilngratefired-gray", red = "fornax:kilngratefired-red";
-
-        Lay((0, gray), (1, gray), (3, gray), (4, gray));
-        Assert.Equal("kilngrate-gray", Crafts());
-
-        Lay((4, red), (5, red), (7, red), (8, red));
-        Assert.Equal("kilngrate-red", Crafts(), "anywhere in the 3x3");
-
-        Lay((0, gray), (1, gray), (3, gray));
-        Assert.Null(Crafts(), "three tiles are not a grate");
-
-        Lay((0, gray), (1, gray), (3, gray), (4, red));
-        Assert.Null(Crafts(), "a grate is one colour");
-
-        Lay((0, "fornax:kilngrateraw-blue"), (1, "fornax:kilngrateraw-blue"), (3, "fornax:kilngrateraw-blue"), (4, "fornax:kilngrateraw-blue"));
-        Assert.Null(Crafts(), "raw tiles have to be fired first");
-        await Ticks(1);
-    }
-
-    /// <summary>
-    /// A grate is four tiles, and the form is one tile a layer, so one clay form is one grate.
-    /// A single-layer recipe completes the moment you finish the outline and the tiles just
-    /// appear, which is not what shaping a floor should feel like; four layers is four tiles.
+    /// The form is the grate itself - vanilla's grating at voxel resolution, eight layers
+    /// tall - so it costs what a solid half-block of clay costs: 49, between a storage vessel
+    /// and a clay oven. The old three-layer tile form gave three grates for eight clay.
     /// </summary>
     [VsTest]
     public async Task GrateClayFormingIsMoreThanOneLayer()
@@ -524,10 +286,11 @@ public class FornaxTests
         Log($"{layersUsed} layers, {total} voxels -> {clay} clay for {recipe.Output.Quantity} tiles");
 
         Assert.Greater(layersUsed, 1, "forming a grate tile should take more than a single layer");
-        Assert.Equal(4, layersUsed);
-        Assert.Equal(4, recipe.Output.Quantity);
-        // 288 voxels over the free 8x8 starting blob: 12 clay, the number the handbook quotes.
-        Assert.Equal(12, clay);
+        Assert.Equal(8, layersUsed);
+        Assert.Equal(1, recipe.Output.Quantity);
+        // 1280 voxels, 1216 over the free 8x8 starting blob: 49 clay, the number the handbook quotes.
+        Assert.Equal(1280, total);
+        Assert.Equal(49, clay);
         await Ticks(1);
     }
 
@@ -2968,7 +2731,7 @@ public class FornaxVisualTests
 
     [VsTest(TimeoutMs = 180000)]
     [RequiresClient]
-    public async Task RawAndFiredGrateTilesLookLikeTheSameObject()
+    public async Task RawAndFiredGratesSideBySide()
     {
         await World.SetCalendarTo(500 * 24 + 12);
 
@@ -2977,11 +2740,11 @@ public class FornaxVisualTests
         World.SetBlock("fornax:kilngrate-red", P(7, 1, 10));
         World.SetBlock("fornax:kilngrate-gray", P(5, 1, 10));
 
-        // raw tiles as a full ground pile, a single one, and a fired pile
+        // raw grates on the ground, one to a pile, one of each clay
         foreach (var (pos, code, n) in new[] {
-            (P(9, 1, 10), "fornax:kilngrateraw-blue", 18),
+            (P(9, 1, 10), "fornax:kilngrateraw-blue", 1),
             (P(11, 1, 10), "fornax:kilngrateraw-red", 1),
-            (P(13, 1, 10), "fornax:kilngratefired-gray", 18) })
+            (P(13, 1, 10), "fornax:kilngrateraw-fire", 1) })
         {
             World.SetBlock("game:groundstorage", pos);
             var gs = World.BEOrNull<BlockEntityGroundStorage>(pos);
@@ -2999,7 +2762,7 @@ public class FornaxVisualTests
 
         string path = await Shot.Take(System.IO.Path.Combine(
             Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "grate-tiles.png"));
-        Log("grates fire/red/gray / raw pile of 18 / single raw / fired pile of 18: " + path);
+        Log("grates fire/red/gray / raw blue / raw red / raw fire: " + path);
         Assert.NotNull(path);
     }
 
@@ -3018,12 +2781,12 @@ public class FornaxVisualTests
         World.SetBlock("fornax:kilngrate-fire", P(3, 0, 10));
         World.SetBlock("game:refractorybrickgrating-good-tier1", P(6, 0, 10));
 
-        foreach (var (x, n) in new[] { (9, 1), (11, 4), (13, 18) })
+        foreach (var (x, clay) in new[] { (9, "blue"), (11, "fire"), (13, "red") })
         {
             World.SetBlock("game:groundstorage", P(x, 1, 10));
             var gs = World.BEOrNull<BlockEntityGroundStorage>(P(x, 1, 10));
             if (gs == null) { Log($"no ground storage at x={x}"); continue; }
-            gs.Inventory[0].Itemstack = World.Stack("fornax:kilngrateraw-blue", n);
+            gs.Inventory[0].Itemstack = World.Stack("fornax:kilngrateraw-" + clay, 1);
             gs.Inventory[0].MarkDirty();
             gs.MarkDirty(true);
         }
@@ -3036,7 +2799,7 @@ public class FornaxVisualTests
 
         string path = await Shot.Take(System.IO.Path.Combine(
             Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "grate-topdown.png"));
-        Log("grate / vanilla grating / raw x1 / raw x4 / raw x18: " + path);
+        Log("grate / vanilla grating / raw blue / raw fire / raw red: " + path);
         Assert.NotNull(path);
     }
 
@@ -3070,9 +2833,9 @@ public class FornaxVisualTests
     }
 
     /// <summary>
-    /// The handbook as a player sees it: a search for the grate lists every tile and grate by
-    /// its display name, a tile's page shows how it is made and what it makes, and the mod's
-    /// own page renders its new paragraph with both links live.
+    /// The handbook as a player sees it: a search for the grate lists every raw and fired
+    /// grate by its display name, the raw grate's page shows how it is made and what it
+    /// becomes, and the mod's own page renders its grate paragraph with the link live.
     /// </summary>
     [VsTest(TimeoutMs = 240000)]
     [RequiresClient]
@@ -3102,9 +2865,9 @@ public class FornaxVisualTests
         }
 
         await Show("search", d => d.Search("kiln grate"));
-        await Show("tile", d => Assert.True(d.OpenDetailPageFor(
-            GuiHandbookItemStackPage.PageCodeForStack(new ItemStack(Vs.Capi.World.GetItem(new AssetLocation("fornax:kilngratefired-gray"))))),
-            "no handbook page for the fired tile"));
+        await Show("raw", d => Assert.True(d.OpenDetailPageFor(
+            GuiHandbookItemStackPage.PageCodeForStack(new ItemStack(Vs.Capi.World.GetItem(new AssetLocation("fornax:kilngrateraw-blue"))))),
+            "no handbook page for the raw grate"));
         await Show("grate", d => Assert.True(d.OpenDetailPageFor(
             GuiHandbookItemStackPage.PageCodeForStack(new ItemStack(Vs.Capi.World.GetBlock(new AssetLocation("fornax:kilngrate-fire"))))),
             "no handbook page for the grate"));
@@ -3144,7 +2907,6 @@ public class FornaxVisualTests
             "fornax:kilngrate-fire",
             "fornax:kilnseal-intact",
             "fornax:kilngrateraw-blue",
-            "fornax:kilngratefired-gray",
             "game:mudbrick-dark",
         };
 

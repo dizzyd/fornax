@@ -1,6 +1,6 @@
 {
 	"code": "kilngrateraw",
-	"//": "One tile of the grate, straight off the clay form: a 16x16 frame with two bars, three quarters of a voxel thick. Fires into kilngratefired of the colour the clay fires to - blue clay comes out gray, as vanilla's bricks do - and four fired tiles make one kilngrate block in the grid.",
+	"//": "The grate, green: clay-formed whole as the grating it will be, then fired one to a pit kiln - or nine to a working updraft kiln. Comes out kilngrate in the colour the clay fires to; blue clay fires gray, as vanilla's bricks do. The shape is vanilla's grating moved down to sit on the ground, since the fired block lives in the top half of its cell.",
 	"variantgroups": [
 		{
 			"code": "color",
@@ -11,46 +11,36 @@
 			]
 		}
 	],
-	"maxstacksize": 32,
+	"maxstacksize": 8,
 	"behaviors": [
 		{
 			"name": "GroundStorable",
 			"properties": {
-				"layout": "Stacking",
+				"layout": "SingleCenter",
 				"placeRemoveSound": "game:sounds/block/dirt1",
-				"stackingModel": "fornax:block/gratepile",
-				"upSolid": true,
-				"stackingCapacity": 18,
-				"transferQuantity": 1,
-				"bulkTransferQuantity": 4,
+				"stackingCapacity": 1,
+				"maxFireable": 1,
 				"collisionBox": {
 					"x1": 0,
 					"y1": 0,
 					"z1": 0,
 					"x2": 1,
-					"y2": 0.25,
+					"y2": 0.5,
 					"z2": 1
-				},
-				"//": "y2 grows a quarter block per ceil(0.2222 * n): four steps over the 18-tile pile.",
-				"cbScaleYByLayer": 0.2222,
-				"maxFireable": 18,
-				"cuboidsPerModel": 6,
-				"itemsPerModel": 1
+				}
 			}
 		}
 	],
 	"shape": {
-		"base": "fornax:item/gratetile"
+		"base": "fornax:item/grateraw"
 	},
 	"textures": {
-		"material": {
+		"front1": {
 			"base": "game:block/clay/{color}clay"
 		}
 	},
 	"attributes": {
 		"tempGlowMode": 1,
-		"displaycaseable": true,
-		"shelvable": true,
 		"handbook": {
 			"groupBy": [
 				"kilngrateraw-*"
@@ -73,12 +63,12 @@
 		"requiresContainer": false,
 		"smeltedStackByType": {
 			"*-blue": {
-				"type": "item",
-				"code": "fornax:kilngratefired-gray"
+				"type": "block",
+				"code": "fornax:kilngrate-gray"
 			},
 			"*": {
-				"type": "item",
-				"code": "fornax:kilngratefired-{color}"
+				"type": "block",
+				"code": "fornax:kilngrate-{color}"
 			}
 		}
 	},
@@ -86,7 +76,7 @@
 	"guiTransform": {
 		"origin": {
 			"x": 0.5,
-			"y": 0.0,
+			"y": 0.25,
 			"z": 0.5
 		},
 		"rotation": {
@@ -109,7 +99,7 @@
 		},
 		"origin": {
 			"x": 0.5,
-			"y": 0,
+			"y": 0.25,
 			"z": 0.5
 		},
 		"scale": 0.55
@@ -122,7 +112,7 @@
 		},
 		"rotation": {
 			"x": 0,
-			"y": -45,
+			"y": 0,
 			"z": 0
 		},
 		"origin": {
@@ -130,6 +120,6 @@
 			"y": 0,
 			"z": 0.5
 		},
-		"scale": 1.5
+		"scale": 1
 	}
 }

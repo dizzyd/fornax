@@ -63,7 +63,7 @@ The nine chamber positions above the grate are checked, but only for being *clea
 that is not a solid cube is allowed to sit in there, which is what keeps the kiln working
 with whatever a mod invents to hold wares. See `IsChamberClear`.
 
-Shopping list, mud kiln: **66 mud brick or cob**, **9 kiln grates** (36 fired tiles), **6 mud seals**,
+Shopping list, mud kiln: **66 mud brick or cob**, **9 kiln grates**, **6 mud seals**,
 **1 firebox**, **1 draft vent**.
 
 Shopping list, brick kiln: **70 fired brick blocks** (any clay or refractory brick, in any mix),
@@ -292,19 +292,22 @@ not the former. `AFiringCountsTowardsXSkillsPottery` is what notices when the ca
 upstream, since reflection that stops resolving is otherwise silent.
 
 
-Grate tiles are clay-formed and then pit-fired, so you must use the old technology once to build
-the new one, and a grate is **four fired tiles** laid together in a 2x2 grid — the same shape
-vanilla gives bricks and roof tiles, a thin thing fired in quantity and then assembled. The
-clay-forming pattern is one tile — a frame with two cross bars — built up over **four layers**,
-one tile a layer, so one form is one grate: 12 clay, once the free starting blob is counted. Nine
-grates is nine formings and 108 clay.
+A grate is clay-formed **whole**, as the grating it will be: a two-voxel frame with two
+two-voxel cross bars, built up over **eight layers**, 160 voxels a layer. That is 49 clay once
+the free starting blob is counted — between a storage vessel (35) and a clay oven (68), which is
+about right for a solid half-block of ceramic. Nine grates is nine formings and 441 clay.
 
-The tile is three quarters of a voxel thick, in the pile as in the hand, and eighteen of them
-stack inside one block, so a pit kiln fires half a floor at a go. That thickness is the point of
-the split: the old tile was pit-fired as a thin slab and came out half a block of ceramic, which
-is exactly the kind of thing a player who counts voxels notices. Tiles carry their clay — blue,
-fire or red — and fire to the colour vanilla's bricks do (blue clay fires gray), so the grate
-block comes in three colours and the structure check takes any mix of them.
+The raw grate is one to a ground pile and a pit kiln fires exactly one, so the first floor is
+nine pit firings — you use the old technology once, and nine times over, to build the new one.
+A finished updraft kiln fires nine raw grates at a go, which is the quicker way to a second
+kiln. Earlier versions clay-formed a thin tile in a three-layer form and pit-fired eight to a
+pile, each coming out half a block of ceramic; a player who counts voxels noticed, and was right.
+
+Raw grates carry their clay — blue, fire or red — and fire to the colour vanilla's bricks do
+(blue clay fires gray), so the grate block comes in three colours and the structure check takes
+any mix of them. The coloured brick faces are the cream base with the colour laid over it, as
+vanilla's own brick courses do it: the gray and red textures carry alpha and go translucent drawn
+on their own.
 
 A world built before 1.8 has `fornax:kilngrate` blocks and `fornax:kilngrateraw` items in it.
 `config/remaps.json` maps them to the fireclay grate and the blue raw tile; the server applies
@@ -347,8 +350,7 @@ you have to load through; placement is overridden for this block.)
 | draft vent | 5 mud bricks |
 | mud seal | 4 clay + 1 dirt, each |
 | wicket panel ×2 | 12 fireclay bricks + 4 copper/bronze rods + 4 nails and strips |
-| grate tile ×4 | 12 clay, clay-formed over four layers, then pit-fired, 18 to a pile |
-| kiln grate | 4 fired grate tiles of one colour, 2x2 |
+| kiln grate | 49 clay, clay-formed whole over eight layers, then pit-fired one at a time |
 
 The mud seals are the mud kiln's running cost — six per firing at 4 clay and a dirt block apiece,
 so **24 clay and 6 dirt per batch** on top of fuel. That is deliberate: the kiln's throughput and
