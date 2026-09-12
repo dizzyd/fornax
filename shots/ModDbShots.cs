@@ -17,7 +17,7 @@ using static VsTestkit.Testing.Vs;
 public class ModDbShots
 {
     private const string Wall = "game:mudbrick-dark";
-    private const string Grate = "fornax:kilngrate";
+    private const string Grate = "fornax:kilngrate-fire";
     private const string Seal = "fornax:kilnseal-intact";
     private const string Vent = "fornax:kilnvent-idle";
     private const string Firebox = "fornax:kilnfirebox-cold-south";

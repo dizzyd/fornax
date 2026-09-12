@@ -28,9 +28,9 @@ metal needednonocopperiron
 BUILDING IT
 
 A 5x5 mud brick drum around a 3x3x4 chamber, corbelled in to a chimney neck and a draft
-vent. Cob works anywhere mud brick does. Nine grate tiles form the floor the wares sit on;
-they are clay-formed and then fired in a pit kiln, so you use the older technology once to
-build the newer one.
+vent. Cob works anywhere mud brick does. Nine grates form the floor the wares sit on, each four
+fired tiles laid together; the tiles are clay-formed and then fired in a pit kiln, so you use
+the older technology once to build the newer one.
 
 Place the firebox where you want the front to be (it turns to face you), then
 Ctrl + right-click it with an empty hand. A blueprint of ghost blocks shows

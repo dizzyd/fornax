@@ -23,7 +23,7 @@ public class BrickKilnTests
 {
     private const string Wall = "game:claybricks-good-fire";
     private const string MudWall = "game:mudbrick-dark";
-    private const string Grate = "fornax:kilngrate";
+    private const string Grate = "fornax:kilngrate-fire";
     private const string Vent = "fornax:kilnvent-idle";
     private const string Luted = "fornax:kilndoor-luted-south";
     private const string Open = "fornax:kilndoor-open-south";

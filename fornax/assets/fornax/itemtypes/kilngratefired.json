@@ -1,11 +1,11 @@
 {
-	"code": "kilngrateraw",
-	"//": "One tile of the grate, straight off the clay form: a 16x16 frame with two bars, three quarters of a voxel thick. Fires into kilngratefired of the colour the clay fires to - blue clay comes out gray, as vanilla's bricks do - and four fired tiles make one kilngrate block in the grid.",
+	"code": "kilngratefired",
+	"//": "A pit-fired grate tile. Same slab as the raw one, in fired brick; four of them in a 2x2 grid are one kilngrate block. The code carries 'fired' on purpose: that is the substring vanilla ground storage looks for when deciding a hot ware can shatter on the way out of a pile.",
 	"variantgroups": [
 		{
 			"code": "color",
 			"states": [
-				"blue",
+				"gray",
 				"fire",
 				"red"
 			]
@@ -44,16 +44,20 @@
 	},
 	"textures": {
 		"material": {
-			"base": "game:block/clay/{color}clay"
+			"base": "game:block/clay/brick/four/running/{color}1"
 		}
 	},
 	"attributes": {
 		"tempGlowMode": 1,
 		"displaycaseable": true,
 		"shelvable": true,
+		"shatteredStack": {
+			"type": "block",
+			"code": "game:clayshattered-singlecenter"
+		},
 		"handbook": {
 			"groupBy": [
-				"kilngrateraw-*"
+				"kilngratefired-*"
 			]
 		}
 	},
@@ -64,23 +68,6 @@
 		"items": [
 			"*"
 		]
-	},
-	"combustibleProps": {
-		"meltingPoint": 650,
-		"meltingDuration": 30,
-		"smeltedRatio": 1,
-		"smeltingType": "fire",
-		"requiresContainer": false,
-		"smeltedStackByType": {
-			"*-blue": {
-				"type": "item",
-				"code": "fornax:kilngratefired-gray"
-			},
-			"*": {
-				"type": "item",
-				"code": "fornax:kilngratefired-{color}"
-			}
-		}
 	},
 	"materialDensity": 2600,
 	"guiTransform": {

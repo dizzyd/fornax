@@ -31,7 +31,7 @@
 		"multiblockStructure": {
 			"blockNumbers": {
 				"@(mudbrick-light|mudbrick-dark|cob-.*)": 1,
-				"fornax:kilngrate": 2,
+				"fornax:kilngrate-*": 2,
 				"fornax:kilnfirebox-*": 3,
 				"fornax:kilnseal-intact": 4,
 				"fornax:kilnvent-*": 5,

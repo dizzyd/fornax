@@ -1,15 +1,52 @@
 {
 	"code": "kilngrate",
+	"//": "The grate the wares sit on: four fired grate tiles laid together. Coloured by the clay the tiles were formed from, so a kiln floor can be all one colour or a patchwork; the structure check takes any of them.",
+	"variantgroups": [
+		{
+			"code": "color",
+			"states": [
+				"gray",
+				"fire",
+				"red"
+			]
+		}
+	],
 	"class": "Block",
 	"attributes": {
 		"handbook": {
 			"groupBy": [
-				"kilngrate"
+				"kilngrate-*"
 			]
 		}
 	},
 	"shape": {
 		"base": "game:block/clay/grating"
+	},
+	"texturesByType": {
+		"*-fire": {
+			"front1": {
+				"base": "game:block/clay/brick/four/running/fire1",
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/fire2"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire3"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire4"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire5"
+					}
+				]
+			}
+		},
+		"*": {
+			"front1": {
+				"base": "game:block/clay/brick/four/running/{color}1"
+			}
+		}
 	},
 	"blockmaterial": "Ceramic",
 	"creativeinventory": {
@@ -30,19 +67,6 @@
 	"sidesolid": {
 		"all": false,
 		"up": true
-	},
-	"textures": {
-		"front1": {
-			"base": "game:block/clay/brick/four/running/cream1",
-			"alternates": [
-				{
-					"base": "game:block/clay/brick/four/running/cream2"
-				},
-				{
-					"base": "game:block/clay/brick/four/running/cream3"
-				}
-			]
-		}
 	},
 	"sounds": {
 		"walk": "game:walk/stone",

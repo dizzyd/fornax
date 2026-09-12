@@ -1,0 +1,20 @@
+[
+	{
+		"//": "Four fired tiles of one colour laid together. No mortar: a grate is set loose on the pillar, not built into it.",
+		"ingredientPattern": "TT,TT",
+		"ingredients": {
+			"T": {
+				"type": "item",
+				"code": "fornax:kilngratefired-*",
+				"name": "color"
+			}
+		},
+		"width": 2,
+		"height": 2,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilngrate-{color}",
+			"quantity": 1
+		}
+	}
+]

@@ -11,7 +11,7 @@ System.Func<int,int,int,Vintagestory.API.MathTools.BlockPos> BP =
 
 int AIR = 0;
 int WALL = id("game:mudbrick-dark");
-int GRATE = id("fornax:kilngrate");
+int GRATE = id("fornax:kilngrate-fire");
 int SEAL = id("fornax:kilnseal-intact");
 int VENT = id("fornax:kilnvent-idle");
 int FIREBOX = id("fornax:kilnfirebox-cold-south");   // mouth faces +z, body runs to -z

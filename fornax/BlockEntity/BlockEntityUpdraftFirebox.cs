@@ -840,7 +840,15 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
             // Ground storage renders a pile from its contents' own storage props, and a fired
             // ware's differ from a green one's. Nothing else in the chamber works that way.
-            if (storage is BlockEntityGroundStorage groundStorage) groundStorage.forceStorageProps = true;
+            // The pit kiln's rule: the fired ware's own props if it has any, else keep the
+            // green ones. Setting the force flag with nothing behind it serialises a flag and
+            // no props, which the client throws on at every update of that pile.
+            if (storage is BlockEntityGroundStorage groundStorage)
+            {
+                var pileProps = fired.Collectible.GetBehavior<CollectibleBehaviorGroundStorable>()?.StorageProps
+                    ?? groundStorage.StorageProps;
+                if (pileProps != null) groundStorage.ForceStorageProps(pileProps);
+            }
 
             slot.Itemstack = fired.Clone();
             slot.Itemstack.StackSize = Math.Max(1, raw.StackSize / ratio);
@@ -1363,6 +1371,9 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (path.Contains(BrickFireboxCode)) return Api.World.GetBlock(new AssetLocation("fornax", BrickFireboxCode + "-cold-north"));
         if (path.Contains("kilnfirebox")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnfirebox-cold-north"));
         if (path.Contains("kilnvent")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnvent-idle"));
+        // Any colour of grate completes the kiln; the ghost shows the fire clay one, which is
+        // the cream brick a grate was before it came in colours.
+        if (path.Contains("kilngrate")) return Api.World.GetBlock(new AssetLocation("fornax", "kilngrate-fire"));
         if (path.Contains("kilnseal")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnseal-intact"));
         if (path.Contains(BlockKilnDoor.CodePart)) return Api.World.GetBlock(new AssetLocation("fornax", "kilndoor-luted-north"));
 

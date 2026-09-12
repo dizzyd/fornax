@@ -43,11 +43,11 @@ The kiln is a 5x5 drum around a 3x3x4 chamber, four courses tall, that then **co
       ▓·▓      y=4   neck, 1x1 flue
      ·▓▓▓·     y=3   corners open    ▓▓▓▓▓     ·▓▓▓·
      ·▓·▓·     y=2   corners open    ▓···▓     ▓···▓
-     ▓▓▒▓▓     y=1   grate tiles     ▓···▓     ▓···▓
+     ▓▓▒▓▓     y=1   grates          ▓···▓     ▓···▓
      ▓▓█▓▓     y=0   chamber+pillar  ▓···▓     ▓···▓
        F       y=0   firebox         ▓▓▓▓▓     ·▓▓▓·
 
-  ▓ mud brick or cob   ▒ kiln grate tile   · open
+  ▓ mud brick or cob   ▒ kiln grate        · open
   █ mud brick pillar   F firebox           v draft vent
 ```
 
@@ -63,11 +63,11 @@ The nine chamber positions above the grate are checked, but only for being *clea
 that is not a solid cube is allowed to sit in there, which is what keeps the kiln working
 with whatever a mod invents to hold wares. See `IsChamberClear`.
 
-Shopping list, mud kiln: **66 mud brick or cob**, **9 kiln grate tiles**, **6 mud seals**,
+Shopping list, mud kiln: **66 mud brick or cob**, **9 kiln grates** (36 fired tiles), **6 mud seals**,
 **1 firebox**, **1 draft vent**.
 
 Shopping list, brick kiln: **70 fired brick blocks** (any clay or refractory brick, in any mix),
-**9 kiln grate tiles**, **2 wicket panels**, **1 brick firebox**, **1 draft vent**. Four more wall
+**9 kiln grates**, **2 wicket panels**, **1 brick firebox**, **1 draft vent**. Four more wall
 blocks than the mud kiln, because the narrower wicket turns four of the six seal positions into
 plain wall.
 
@@ -293,10 +293,22 @@ upstream, since reflection that stops resolving is otherwise silent.
 
 
 Grate tiles are clay-formed and then pit-fired, so you must use the old technology once to build
-the new one. The clay-forming pattern is the grate itself — a frame with two cross bars —
-built up over **three layers**, since the fired tile is eight voxels thick and a one-layer form
-finishes the moment you close the outline. That is 8 clay for three tiles, so nine tiles is
-three formings and 24 clay. Raw tiles stack eight to a ground pile and all eight fire together.
+the new one, and a grate is **four fired tiles** laid together in a 2x2 grid — the same shape
+vanilla gives bricks and roof tiles, a thin thing fired in quantity and then assembled. The
+clay-forming pattern is one tile — a frame with two cross bars — built up over **four layers**,
+one tile a layer, so one form is one grate: 12 clay, once the free starting blob is counted. Nine
+grates is nine formings and 108 clay.
+
+The tile is three quarters of a voxel thick, in the pile as in the hand, and eighteen of them
+stack inside one block, so a pit kiln fires half a floor at a go. That thickness is the point of
+the split: the old tile was pit-fired as a thin slab and came out half a block of ceramic, which
+is exactly the kind of thing a player who counts voxels notices. Tiles carry their clay — blue,
+fire or red — and fire to the colour vanilla's bricks do (blue clay fires gray), so the grate
+block comes in three colours and the structure check takes any mix of them.
+
+A world built before 1.8 has `fornax:kilngrate` blocks and `fornax:kilngrateraw` items in it.
+`config/remaps.json` maps them to the fireclay grate and the blue raw tile; the server applies
+the group once per save on load, the same way the game's own version remaps run.
 
 The frame and bars are one voxel wide rather than the fired tile's two: at three layers a
 two-voxel frame costs 14 clay, which is absurd for a floor tile. The outline still reads as a
@@ -309,7 +321,7 @@ can only manage one element per item.
 
 Place the firebox first, then **`Ctrl` + right-click it with an empty hand**: a blueprint of ghost
 blocks shows everything still to place — **drawn with each block's own texture**, so you can see
-that a course is mud brick and the floor is grate tiles, with a faint colour wash on top as a
+that a course is mud brick and the floor is grates, with a faint colour wash on top as a
 hint and bright red for anything in the way. The same click takes it down.
 
 `IWorldAccessor.HighlightBlocks` can only paint flat colours, so the textured part is a custom
@@ -335,7 +347,8 @@ you have to load through; placement is overridden for this block.)
 | draft vent | 5 mud bricks |
 | mud seal | 4 clay + 1 dirt, each |
 | wicket panel ×2 | 12 fireclay bricks + 4 copper/bronze rods + 4 nails and strips |
-| grate tile ×3 | 8 clay, clay-formed over three layers, then pit-fired |
+| grate tile ×4 | 12 clay, clay-formed over four layers, then pit-fired, 18 to a pile |
+| kiln grate | 4 fired grate tiles of one colour, 2x2 |
 
 The mud seals are the mud kiln's running cost — six per firing at 4 clay and a dirt block apiece,
 so **24 clay and 6 dirt per batch** on top of fuel. That is deliberate: the kiln's throughput and
