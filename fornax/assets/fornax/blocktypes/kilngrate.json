@@ -44,7 +44,36 @@
 		},
 		"*": {
 			"front1": {
-				"base": "game:block/clay/brick/four/running/{color}1"
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{color}1"
+				],
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					}
+				]
 			}
 		}
 	},

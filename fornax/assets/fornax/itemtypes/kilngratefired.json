@@ -42,9 +42,59 @@
 	"shape": {
 		"base": "fornax:item/gratetile"
 	},
-	"textures": {
-		"material": {
-			"base": "game:block/clay/brick/four/running/{color}1"
+	"texturesByType": {
+		"*-fire": {
+			"material": {
+				"base": "game:block/clay/brick/four/running/fire1",
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/fire2"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire3"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire4"
+					},
+					{
+						"base": "game:block/clay/brick/four/running/fire5"
+					}
+				]
+			}
+		},
+		"*": {
+			"material": {
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{color}1"
+				],
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					}
+				]
+			}
 		}
 	},
 	"attributes": {
