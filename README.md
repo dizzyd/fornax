@@ -172,6 +172,13 @@ What a ware turns into is resolved in this order: `fornaxkiln` first, since that
 about *this* kiln and whoever set it meant it; then `combustibleProps.smeltedStack`; and
 `beehivekiln` last, only as a fallback for a ware that has nothing else.
 
+A ware usually sits in a ground-storage pile on the grate, but one that is a **block standing on
+the grate** fires too, provided it fires into a block — Freeform Clay Sculpting's sculptures are
+carved in place, and fire where they stand into the vanilla chiseled block that mod makes of
+them. The kiln reads such a block as the stack it would be picked up as, and puts the fired block
+back in its place. A chiseled block keeps no temperature, so a fired sculpture comes out cool
+rather than hot the way a pile does.
+
 That last ordering is deliberate and not the obvious one. `beehivekiln` is keyed `0`–`3` by how
 many of that kiln's doors stand open, because that is what decides how much air reaches the
 wares, and key `0` is the fully reducing firing that a mud-sealed chamber physically is. Taking
@@ -241,6 +248,18 @@ No vanilla ware can trigger it: the hottest this kiln fires melts at 850 — raw
 brick, shingle — against 900 from the coolest legal fuel. The check exists because the kiln takes
 anything carrying a kiln tag now, and a mod is free to tag something that wants more heat than
 this makes.
+
+**Up to 1200 °C.** A melting point above 1200 is not read as a firing temperature at all, and that
+ware fires at whatever the chamber reaches. The reason is a second use mods make of the number:
+vanilla lets a firepit fire pottery when `allowOpenFireFiring` is on, provided the ware has a
+melting point, so a mod keeps a ware out of an open fire by giving it one nothing reaches —
+Freeform Clay Sculpting gives every raw sculpture 9999. Neither vanilla kiln reads the number, so
+a pit kiln fires those; read as a requirement here, every one of them was refused as too cold.
+
+Nothing tells that sentinel from a real requirement, so the line is a policy, and it has a cost:
+a ware that genuinely needs 1300 fires cold here. It is fixed at 1200 — the chamber's default
+ceiling, which charcoal reaches — rather than following `ChamberMaxTemperature`, so that a server
+capping the chamber lower does not turn raw brick's 850 into a sentinel as well.
 
 ### BulkQuicklime takes the lime away
 

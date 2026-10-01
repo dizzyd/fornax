@@ -10,6 +10,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Fornax;
 using Vintagestory.API.Common;
+using Vintagestory.API.Config;
+using Vintagestory.API.Datastructures;
 using Vintagestory.API.MathTools;
 using Vintagestory.GameContent;
 using VsTestkit.Testing;
@@ -652,5 +654,233 @@ public class CompatTests
             $"wares={Be().CountWares()}");
         Assert.Equal(cfg.RespectMaxFireable ? 0 : storage.StackingCapacity, Be().CountWares(),
             "a full pile fires unless the cap is on, in which case none of it does");
+    }
+
+    // ------------------------------------------------------------------
+    //  Lichen: Freeform Clay Sculpting
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A raw sculpture, as the mod stores one: its voxels and their materials in the stack's
+    /// attributes, the same shape a vanilla chiseled block keeps. Built by hand rather than
+    /// through the mod's own types so that this file still compiles when the mod is absent.
+    /// </summary>
+    private static readonly uint SculptureShape = BlockEntityMicroBlock.ToUint(4, 0, 4, 12, 8, 12, 0);
+
+    private static ItemStack RawSculpture(string clay)
+    {
+        var sculpt = Sapi.World.GetBlock(new AssetLocation("freeformclay:claysculpt"));
+        var raw = Sapi.World.GetBlock(new AssetLocation($"freeformclay:rawclayblock-{clay}"));
+        Assert.NotNull(sculpt, "freeformclay:claysculpt should be registered");
+        Assert.NotNull(raw, $"freeformclay:rawclayblock-{clay} should be registered");
+
+        var stack = new ItemStack(sculpt, 1);
+        stack.Attributes["cuboids"] = new IntArrayAttribute(new[] { (int)SculptureShape });
+        stack.Attributes["materials"] = new IntArrayAttribute(new[] { raw.Id });
+        return stack;
+    }
+
+    private static void StandSculpture(BlockPos at, string clay)
+    {
+        var raw = RawSculpture(clay);
+        Sapi.World.BlockAccessor.SetBlock(raw.Block.Id, at, raw);
+    }
+
+    private static string BlockInfo()
+    {
+        var dsc = new System.Text.StringBuilder();
+        Be().GetBlockInfo(null, dsc);
+        return dsc.ToString();
+    }
+
+    private static async Task FireToCompletion(ItemStack fuel, IPlayer litBy = null)
+    {
+        var be = Be();
+        be.Inventory[0].Itemstack = fuel;
+        be.Inventory[0].MarkDirty();
+        await Tick3s();
+
+        be.TryIgnite(litBy?.Entity);
+        Assert.True(be.Lit, "the kiln should light");
+
+        for (int i = 0; i < 10 && be.Lit; i++) { await Hours(3); await Tick3s(); }
+        Assert.True(be.BatchFired, "the batch should have fired");
+    }
+
+    /// <summary>
+    /// A sculpture in ground storage fires, which is how the mod's own pit kiln holds one.
+    ///
+    /// The mod gives every raw sculpture a melting point of 9999 to keep it out of an open fire,
+    /// and this kiln used to read that as a firing temperature and refuse it as too cold.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task ASculptureInAPileFires()
+    {
+        if (!Needs("freeformclay")) return;
+
+        FornaxTests.Build(Fb());
+        World.SetBlock("game:groundstorage", Ware(0, 0));
+        await Ticks(2);
+
+        var storage = World.BE<BlockEntityGroundStorage>(Ware(0, 0));
+        storage.Inventory[0].Itemstack = RawSculpture("red");
+        storage.Inventory[0].MarkDirty();
+        storage.MarkDirty(true);
+        await Tick3s();
+
+        var be = Be();
+        Log($"sculpture in a pile -> wares={be.CountWares()} tooCold={be.FirstTooColdOnGrate()?.GetName()} " +
+            $"unfireable={be.FirstUnfireableOnGrate()}");
+        Assert.Equal(1, be.CountWares(), "the sculpture is kiln work");
+        Assert.Null(be.FirstTooColdOnGrate(), "9999 keeps it out of a firepit, it is not a firing temperature");
+
+        await FireToCompletion(World.Stack("game:firewood", 32));
+
+        var fired = World.BE<BlockEntityGroundStorage>(Ware(0, 0)).Inventory[0].Itemstack;
+        Log($"after firing: {fired?.Collectible?.Code}");
+        Assert.Equal("game:chiseledblock", fired?.Collectible?.Code?.ToString());
+    }
+
+    /// <summary>
+    /// A sculpture standing on the grate fires where it stands, and is left there as the vanilla
+    /// chiseled block the mod turns it into, in the hardened clay its raw clay fires to.
+    ///
+    /// Standing is how a sculpture is made - it is carved in place - and the firing used to
+    /// read piles and nothing else, so the kiln called it unfireable and it had to be picked up
+    /// and put down again as a pile first.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task AStandingSculptureFiresWhereItStands()
+    {
+        if (!Needs("freeformclay")) return;
+
+        FornaxTests.Build(Fb());
+        await Ticks(2);
+
+        StandSculpture(Ware(0, 0), "red");
+        await Ticks(2);
+
+        var sculpture = World.BEOrNull<BlockEntityMicroBlock>(Ware(0, 0));
+        Assert.NotNull(sculpture, "the sculpture should stand on the grate as a block");
+        Assert.True(sculpture.VoxelCuboids.SequenceEqual(new[] { SculptureShape }), "carrying the voxels it was placed with");
+
+        await Tick3s();
+        var be = Be();
+        Log($"standing sculpture -> complete={be.StructureComplete} wares={be.CountWares()} " +
+            $"unfireable={be.FirstUnfireableOnGrate()} tooCold={be.FirstTooColdOnGrate()?.GetName()}");
+        Assert.True(be.StructureComplete, "a sculpture is not a solid cube and must not break the kiln");
+        Assert.Equal(1, be.CountWares(), "the kiln counts it as a ware");
+        Assert.Null(be.FirstUnfireableOnGrate(), "and does not call it unfireable");
+
+        await FireToCompletion(World.Stack("game:firewood", 32));
+
+        Log($"after firing: {World.BlockCode(Ware(0, 0))}");
+        Assert.Equal("game:chiseledblock", World.BlockCode(Ware(0, 0)), "fired in place, still standing");
+
+        var chiseled = World.BE<BlockEntityMicroBlock>(Ware(0, 0));
+        var hardened = Sapi.World.GetBlock(new AssetLocation("game:hardenedclay-red"));
+        Log($"materials: {string.Join(", ", chiseled.BlockIds.Select(id => Sapi.World.GetBlock(id)?.Code?.ToString()))}");
+        Assert.True(chiseled.VoxelCuboids.SequenceEqual(new[] { SculptureShape }), "the same shape, in the same place");
+        Assert.True(chiseled.BlockIds.SequenceEqual(new[] { hardened.Id }), "in fired clay, not raw");
+
+        string info = BlockInfo();
+        Log("block info:\n" + info.TrimEnd());
+        Assert.Equal(0, be.CountWares(), "nothing left to fire");
+        Assert.Equal(1, be.CountFinishedWares(), "but the finished sculpture is the batch");
+        Assert.True(info.Contains(Lang.Get("fornax:fired-wares", 1)), "and the kiln says so");
+        Assert.True(!info.Contains(Lang.Get("fornax:no-wares")), "rather than calling the grate empty");
+        Assert.Null(be.FirstUnfireableOnGrate(), "and a finished sculpture is not something the kiln failed at");
+    }
+
+    /// <summary>
+    /// Only the chiseled block the firing made is a finished ware, not any chiseled block.
+    ///
+    /// A fired sculpture is a vanilla chiseled block and fires into nothing, so there is nothing
+    /// about one to tell it from a decoration somebody chiselled onto the grate. The kiln counts
+    /// the ones it remembers making, and a stranger is still something it will not fire.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task OnlyTheSculptureTheFiringMadeCountsAsFinished()
+    {
+        if (!Needs("freeformclay")) return;
+
+        FornaxTests.Build(Fb());
+        await Ticks(2);
+        StandSculpture(Ware(0, 0), "red");
+        await Ticks(2);
+
+        await FireToCompletion(World.Stack("game:firewood", 32));
+        Assert.Equal(1, Be().CountFinishedWares());
+
+        // a chiseled block the kiln did not make, next to the one it did
+        var chiseled = World.BE<BlockEntityMicroBlock>(Ware(0, 0));
+        var tree = new TreeAttribute();
+        chiseled.ToTreeAttributes(tree);
+        var stranger = new ItemStack(Sapi.World.GetBlock(new AssetLocation("game:chiseledblock")), 1) { Attributes = tree };
+        Sapi.World.BlockAccessor.SetBlock(stranger.Block.Id, Ware(1, 0), stranger);
+        await Ticks(2);
+
+        Log($"with a stranger beside it -> finished={Be().CountFinishedWares()} unfireable={Be().FirstUnfireableOnGrate()}");
+        Assert.Equal(1, Be().CountFinishedWares(), "the stranger is not part of the batch");
+        Assert.NotNull(Be().FirstUnfireableOnGrate(), "and it is something the kiln will not fire");
+
+        // and the one the kiln made stops counting once it is gone
+        World.SetBlock("game:air", Ware(0, 0));
+        await Ticks(2);
+        Assert.Equal(0, Be().CountFinishedWares(), "a sculpture taken off the grate is no longer on it");
+    }
+
+    /// <summary>
+    /// A standing sculpture fired by a player with XSkills' Pottery Timer leaves XSkills working.
+    ///
+    /// The timer tells the player which kiln finished by asking the fired ware's slot for its
+    /// inventory's position. A standing ware's slot used to have no inventory at all, the timer
+    /// threw, and the kiln's XSkills hook - shared by every kiln on the server - switched itself
+    /// off for good. Every other test here lights the kiln with nobody, which never reaches it.
+    /// </summary>
+    [VsTest(TimeoutMs = 240000)]
+    [RequiresClient]
+    public async Task APotteryTimerFiringOfAStandingSculptureKeepsXSkills()
+    {
+        if (!Needs("freeformclay") || !NeedsXSkills()) return;
+
+        var player = Sapi.World.AllOnlinePlayers.FirstOrDefault();
+        Assert.NotNull(player, "this one needs a real player to credit");
+        Assert.True(XSkillsPottery.Bound, "xskills should be bound before the firing");
+
+        var skillSet = player.Entity.GetBehavior("SkillSet");
+        var skill = skillSet.GetType().GetMethod("FindSkill", new[] { typeof(string), typeof(bool) })
+            .Invoke(skillSet, new object[] { "pottery", false });
+        var level = skill.GetType().GetProperty("Level");
+        var timer = skill.GetType().GetMethod("FindAbility", new[] { typeof(string), typeof(bool) })
+            .Invoke(skill, new object[] { "potterytimer", false });
+        Assert.NotNull(timer, "xskills' pottery skill has no potterytimer ability");
+        var tier = timer.GetType().GetProperty("Tier");
+
+        int wasLevel = (int)level.GetValue(skill);
+        int wasTier = (int)tier.GetValue(timer);
+
+        try
+        {
+            level.SetValue(skill, 8);
+            tier.SetValue(timer, 1);
+            Assert.Equal(1, (int)tier.GetValue(timer), "the timer should be on for this firing");
+
+            FornaxTests.Build(Fb());
+            await Ticks(2);
+            StandSculpture(Ware(0, 0), "red");
+            await Ticks(2);
+
+            await FireToCompletion(World.Stack("game:firewood", 32), player);
+
+            Log($"after firing: {World.BlockCode(Ware(0, 0))}, xskills bound = {XSkillsPottery.Bound}");
+            Assert.Equal("game:chiseledblock", World.BlockCode(Ware(0, 0)));
+            Assert.True(XSkillsPottery.Bound, "the timer must not have taken XSkills out");
+        }
+        finally
+        {
+            tier.SetValue(timer, wasTier);
+            level.SetValue(skill, wasLevel);
+        }
     }
 }

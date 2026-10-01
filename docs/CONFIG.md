@@ -22,7 +22,10 @@ cheaper, it just burns through the same energy faster:
 | Charcoal | 18 | 6 hours |
 
 Fuel temperature decides **how hot the chamber gets**, not how much it costs. A ware that
-melts above the chamber temperature simply is not fired.
+melts above the chamber temperature simply is not fired — up to 1200 °C. A melting point over
+1200 is read as a mod keeping its ware out of an open fire, not as a firing temperature, and
+that ware fires whatever the chamber reaches. The line is fixed and does not follow
+`ChamberMaxTemperature`; see *Heat* in the README.
 
 `FiringEnergyHours` and `NominalBurnRate` move together: change one without the other and
 you change how long a firing takes as well as what it costs.
@@ -111,7 +114,9 @@ again. It rewards being run back to back.
 `NominalBurnRate` by the same proportion.
 
 **Let the kiln fire hotter wares** — raise `ChamberMaxTemperature`, and remember fuel
-temperature still has to reach it. `DraftTemperatureBonus` is what the chimney adds.
+temperature still has to reach it. `DraftTemperatureBonus` is what the chimney adds. Only
+wares melting at up to 1200 °C are held to the chamber temperature at all, so raising it past
+1200 makes the chamber hotter without changing what it will fire.
 
 **Allow poorer fuels** — lower `MinFuelBurnTemperature`. They will fire the chamber less
 hot, so check your wares still reach their firing temperature.

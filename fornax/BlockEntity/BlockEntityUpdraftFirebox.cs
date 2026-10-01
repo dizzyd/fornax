@@ -84,6 +84,14 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// </summary>
     public bool BatchFired;
 
+    /// <summary>
+    /// Where this batch left a standing ware, and the block it left there. A fired sculpture is
+    /// a vanilla chiseled block that fires into nothing, so it cannot be told apart from any
+    /// other chiseled block by looking at it - only by remembering which ones the firing made.
+    /// Cleared with <see cref="BatchFired"/>.
+    /// </summary>
+    private readonly List<(BlockPos At, int BlockId)> firedStanding = new();
+
     /// <summary>Fuel energy already burned towards <see cref="FornaxConfig.FiringEnergyHours"/>.</summary>
     public double FiredEnergyHours;
 
@@ -212,6 +220,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (StructureComplete && BatchFired)
         {
             BatchFired = false;
+            firedStanding.Clear();
             dirty = true;
         }
 
@@ -506,13 +515,14 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     //  Wares
     // =====================================================================
 
-    private bool IsFireable(ItemStack stack)
+    private bool IsFireable(ItemSlot slot) => IsFireable(slot.Itemstack, PropsOf(slot));
+
+    private bool IsFireable(ItemStack stack, CombustibleProperties props)
     {
         if (stack?.Collectible == null) return false;
 
         if (HasKilnTag(stack)) return true;
 
-        var props = stack.Collectible.GetCombustibleProperties(Api.World, stack, null);
         if (props == null) return false;
 
         if (props.SmeltingType == EnumSmeltType.Fire) return true;
@@ -589,7 +599,111 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         && be.GetType() == (api?.ClassRegistry?.GetBlockEntity(GroundStorageClass)
                             ?? typeof(BlockEntityGroundStorage));
 
-    /// <summary>Every occupied slot in the chamber a firing can reach, fireable or not.</summary>
+    /// <summary>
+    /// A ware that is a block in its own right, standing on the grate, as a slot holding the
+    /// stack it would be picked up as - or null for anything else.
+    ///
+    /// Freeform Clay Sculpting's sculptures are carved in place, so standing is how every one of
+    /// them arrives, and a firing that read piles and nothing else called them unfireable. Only
+    /// a block that fires into a block counts: the firing puts the result back where the ware
+    /// stood (<see cref="CommitStandingWare"/>), and an item has nowhere to stand.
+    ///
+    /// Asking a stack for its combustible properties is not always cheap - Freeform Clay builds
+    /// the whole fired sculpture to answer - so they are asked once here and carried in the slot.
+    /// </summary>
+    private StandingWareSlot StandingWare(BlockEntity be)
+    {
+        if (be == null || be is BlockEntityContainer) return null;
+
+        var stack = be.Block?.OnPickBlock(Api.World, be.Pos);
+        if (stack == null) return null;
+
+        var props = PropsOf(stack);
+        if (!IsFireable(stack, props) || FiredResult(stack, props)?.Block == null) return null;
+
+        return new StandingWareSlot(Api, stack, props, be.Pos.Copy());
+    }
+
+    /// <summary>
+    /// A standing ware, read out of the world. Not a view of it: the stack is a snapshot, so
+    /// changing it changes nothing until <see cref="CommitStandingWare"/> writes it back.
+    ///
+    /// It has an inventory of its own only so that it has a position. XSkills' Pottery Timer
+    /// names the ware a player's firing finished by <c>slot.Inventory.Pos</c>, and threw on a
+    /// slot with no inventory - which took XSkills out for every kiln on the server.
+    /// </summary>
+    private sealed class StandingWareSlot : DummySlot
+    {
+        public readonly BlockPos At;
+
+        private readonly ItemStack raw;
+        private readonly CombustibleProperties rawProps;
+
+        public StandingWareSlot(ICoreAPI api, ItemStack stack, CombustibleProperties props, BlockPos at)
+            : base(stack, new DummyInventory(api) { Pos = at })
+        {
+            At = at;
+            raw = stack;
+            rawProps = props;
+        }
+
+        /// <summary>
+        /// Nothing to tell. The inventory is only there for its position, does not hold this
+        /// slot, and throws when told about it; the write that matters is the commit.
+        /// </summary>
+        public override void MarkDirty() { }
+
+        /// <summary>The properties it was read with, for as long as it is still that stack.</summary>
+        public bool TryGetProps(out CombustibleProperties props)
+        {
+            props = rawProps;
+            return ReferenceEquals(Itemstack, raw);
+        }
+    }
+
+    private CombustibleProperties PropsOf(ItemStack stack) =>
+        stack?.Collectible?.GetCombustibleProperties(Api.World, stack, null);
+
+    private CombustibleProperties PropsOf(ItemSlot slot) =>
+        slot is StandingWareSlot standing && standing.TryGetProps(out var props) ? props : PropsOf(slot.Itemstack);
+
+    /// <summary>
+    /// Writes a standing ware back into the world: the block it now is, or nothing if it has
+    /// shattered. XSkills' Inspiration can swap a fired ware for another, and should that ever
+    /// hand back an item, it has nowhere to stand and drops where the ware stood.
+    /// </summary>
+    private void CommitStandingWare(StandingWareSlot ware)
+    {
+        var stack = ware.Itemstack;
+        var accessor = Api.World.BlockAccessor;
+
+        if (stack?.Block != null)
+        {
+            accessor.SetBlock(stack.Block.Id, ware.At, stack);
+            return;
+        }
+
+        accessor.SetBlock(0, ware.At);
+        if (stack != null) Api.World.SpawnItemEntity(stack, ware.At.ToVec3d().Add(0.5, 0.5, 0.5));
+    }
+
+    /// <summary>Whether this batch fired a standing ware here, and it is still here.</summary>
+    private bool IsFiredStandingWare(BlockPos pos)
+    {
+        int blockId = Api.World.BlockAccessor.GetBlock(pos).Id;
+        foreach (var (at, id) in firedStanding)
+        {
+            if (at.Equals(pos) && id == blockId) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Every occupied slot in the chamber a firing can reach, fireable or not - and every
+    /// <see cref="StandingWare"/>, as a slot of its own. A pile's slot is the pile; a standing
+    /// ware's is a snapshot, and whatever changes it has to <see cref="CommitStandingWare"/>.
+    /// </summary>
     private void WalkGrate(Action<BlockEntity, ItemSlot> onSlot)
     {
         if (centerPos == null) return;
@@ -605,7 +719,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                     pos.Set(centerPos.X + dx, centerPos.Y + y, centerPos.Z + dz);
 
                     var be = Api.World.BlockAccessor.GetBlockEntity(pos);
-                    if (!IsWareHolder(be)) continue;
+                    if (!IsWareHolder(be))
+                    {
+                        if (StandingWare(be) is ItemSlot standing) onSlot(be, standing);
+                        continue;
+                    }
 
                     var inventory = ((BlockEntityContainer)be).Inventory;
 
@@ -627,9 +745,9 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     ///
     /// Two ways to end up here. A block in a ware position that is not ground storage - a modded
     /// kiln shelf, a chest, a lime pile - is legal structurally, since the chamber only refuses
-    /// solid cubes, but <see cref="WalkGrate"/> reads ground storage and nothing else, so its
-    /// contents are simply not part of the batch. And an item with no fire-smelting path is
-    /// ground-stored quite happily and then ignored. Both used to be silent.
+    /// solid cubes, but <see cref="WalkGrate"/> reads ground storage and standing wares and
+    /// nothing else, so its contents are simply not part of the batch. And an item with no
+    /// fire-smelting path is ground-stored quite happily and then ignored. Both used to be silent.
     /// </summary>
     public string FirstUnfireableOnGrate()
     {
@@ -653,14 +771,20 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                     if (!IsChamberClear(block)) continue;
 
                     var be = Api.World.BlockAccessor.GetBlockEntity(pos);
-                    if (!IsWareHolder(be)) return BlockName(block, pos);
+                    if (!IsWareHolder(be))
+                    {
+                        // A standing ware is part of the batch, and once fired it is part of the
+                        // finished one - not a complaint, the same as a pile of fired pots below.
+                        if (StandingWare(be) != null || IsFiredStandingWare(pos)) continue;
+                        return BlockName(block, pos);
+                    }
 
                     var inventory = ((BlockEntityContainer)be).Inventory;
 
                     for (int i = 0; i < inventory.Count; i++)
                     {
                         var slot = inventory[i];
-                        if (slot.Empty || IsFireable(slot.Itemstack)) continue;
+                        if (slot.Empty || IsFireable(slot)) continue;
 
                         // A finished batch is unfireable too, and saying so would be nonsense.
                         if (BatchFired) continue;
@@ -703,8 +827,6 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return Math.Min(hottestFuel + Cfg.DraftTemperatureBonus, Cfg.ChamberMaxTemperature);
     }
 
-    private static int MeltingPointOf(ItemStack stack, IWorldAccessor world) =>
-        stack.Collectible.GetCombustibleProperties(world, stack, null)?.MeltingPoint ?? 0;
 
     /// <summary>
     /// Whether the chamber will never get hot enough to do anything with this.
@@ -714,8 +836,35 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// still drives the chamber to 900. But the kiln takes anything carrying a kiln tag now,
     /// and a mod is free to tag something that wants more heat than this makes; firing it
     /// anyway would be the kiln lying about what it is.
+    ///
+    /// Except over <see cref="HottestFiringTemperature"/>, where the number is not read as a
+    /// firing temperature at all and the ware fires whatever the chamber reaches.
     /// </summary>
-    private bool IsTooCold(ItemStack stack, float target) => MeltingPointOf(stack, Api.World) > target;
+    private static bool IsTooCold(CombustibleProperties props, float target)
+    {
+        int meltsAt = props?.MeltingPoint ?? 0;
+        return meltsAt > target && meltsAt <= HottestFiringTemperature;
+    }
+
+    /// <summary>
+    /// The highest melting point this kiln treats as a firing temperature. A policy, not an
+    /// engine rule: above it the number is ignored, and the ware fires at whatever heat the
+    /// chamber reaches - including a ware that genuinely wanted more.
+    ///
+    /// What it is for is a melting point used to say "not in an open fire". Vanilla lets a
+    /// firepit fire pottery when allowOpenFireFiring is on, provided the ware has a melting
+    /// point at all, and Freeform Clay Sculpting gives every raw sculpture 9999 to keep it out.
+    /// Neither vanilla kiln reads the number, so the pit kiln fires sculptures; read as a
+    /// requirement here it refused every one of them. Nothing distinguishes such a sentinel from
+    /// a real requirement, so a line has to be drawn somewhere.
+    ///
+    /// 1200 because it is the chamber's own default ceiling, which charcoal reaches: below it
+    /// every melting point is one the kiln can meet with the right fuel, and the check keeps its
+    /// full meaning. Fixed rather than read from <see cref="FornaxConfig.ChamberMaxTemperature"/>,
+    /// because a chamber capped at 800 would otherwise turn raw brick's 850 into a sentinel and
+    /// fire it cold.
+    /// </summary>
+    private const int HottestFiringTemperature = 1200;
 
     /// <summary>The green wares: the ones a firing still has work to do on.</summary>
     private void WalkWares(Action<BlockEntity, ItemSlot> onWare)
@@ -725,8 +874,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         WalkGrate((storage, slot) =>
         {
-            var stack = slot.Itemstack;
-            if (IsFireable(stack) && !IsOverfull(stack) && !IsTooCold(stack, target)) onWare(storage, slot);
+            var props = PropsOf(slot);
+            if (IsFireable(slot.Itemstack, props) && !IsOverfull(slot.Itemstack) && !IsTooCold(props, target))
+            {
+                onWare(storage, slot);
+            }
         });
     }
 
@@ -745,8 +897,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         {
             if (found != null) return;
 
-            var stack = slot.Itemstack;
-            if (IsFireable(stack) && !IsOverfull(stack) && IsTooCold(stack, target)) found = stack;
+            var props = PropsOf(slot);
+            if (IsFireable(slot.Itemstack, props) && !IsOverfull(slot.Itemstack) && IsTooCold(props, target))
+            {
+                found = slot.Itemstack;
+            }
         });
 
         return found;
@@ -756,7 +911,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     public void ChamberVersus(ItemStack stack, out int reaches, out int needs)
     {
         reaches = (int)TargetChamberTemperature();
-        needs = MeltingPointOf(stack, Api.World);
+        needs = PropsOf(stack)?.MeltingPoint ?? 0;
     }
 
     /// <summary>
@@ -772,7 +927,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         WalkGrate((_, slot) =>
         {
             if (found != null) return;
-            if (IsFireable(slot.Itemstack) && IsOverfull(slot.Itemstack)) found = slot.Itemstack;
+            if (IsFireable(slot) && IsOverfull(slot.Itemstack)) found = slot.Itemstack;
         });
 
         return found;
@@ -790,22 +945,36 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// has just finished one, is the batch itself. Fired pottery has no combustible properties
     /// any more, so it stops being counted as wares at the exact moment the player most wants
     /// to be told it is there.
+    ///
+    /// A standing ware is not in a slot once it has fired, so it is counted from where the
+    /// firing left it instead.
     /// </summary>
     public int CountFinishedWares()
     {
         int total = 0;
         WalkGrate((_, slot) =>
         {
-            if (!IsFireable(slot.Itemstack)) total += slot.Itemstack.StackSize;
+            if (!IsFireable(slot)) total += slot.Itemstack.StackSize;
         });
+
+        foreach (var (at, _) in firedStanding)
+        {
+            if (IsFiredStandingWare(at)) total++;
+        }
 
         return total;
     }
 
+    /// <summary>
+    /// Standing wares are left out: a chiseled block keeps no temperature, so there is nowhere
+    /// to put the heat, and a fired sculpture comes out at ambient rather than hot.
+    /// </summary>
     private void ApplyChamberTemperatureToWares()
     {
         WalkWares((storage, slot) =>
         {
+            if (slot is StandingWareSlot) return;
+
             slot.Itemstack.Collectible.SetTemperature(Api.World, slot.Itemstack, ChamberTemperature);
             slot.MarkDirty();
             storage.MarkDirty();
@@ -826,10 +995,14 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         // half way through deciding what they are.
         var credited = creditTo == null ? null : new List<(BlockEntity Holder, ItemSlot Slot)>();
 
+        // Written back only once XSkills is done with them, for the same reason.
+        var standing = new List<StandingWareSlot>();
+        firedStanding.Clear();
+
         WalkWares((storage, slot) =>
         {
             var raw = slot.Itemstack;
-            var props = raw.Collectible.GetCombustibleProperties(Api.World, raw, null);
+            var props = PropsOf(slot);
             var fired = FiredResult(raw, props);
             if (fired == null) return;
 
@@ -855,12 +1028,19 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             slot.Itemstack.Collectible.SetTemperature(Api.World, slot.Itemstack, temperature);
 
             credited?.Add((storage, slot));
+            if (slot is StandingWareSlot ware) standing.Add(ware);
 
             slot.MarkDirty();
             storage.MarkDirty(true);
         });
 
         if (credited != null) XSkillsPottery.GrantFiring(Api, creditTo, credited);
+
+        foreach (var ware in standing)
+        {
+            CommitStandingWare(ware);
+            if (ware.Itemstack?.Block is Block block) firedStanding.Add((ware.At, block.Id));
+        }
 
         Lit = false;
         FiredEnergyHours = 0;
@@ -977,6 +1157,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
             slot.MarkDirty();
             storage.MarkDirty(true);
+            if (slot is StandingWareSlot ware) CommitStandingWare(ware);
         });
 
         if (shattered > 0)
@@ -1626,6 +1807,13 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         ChamberTemperature = tree.GetFloat("chamberTemperature");
         totalHoursLastUpdate = tree.GetDouble("totalHoursLastUpdate");
         litByUid = tree.GetString("litByUid");
+
+        firedStanding.Clear();
+        int[] standing = (tree["firedStanding"] as IntArrayAttribute)?.value;
+        for (int i = 0; standing != null && i + 3 < standing.Length; i += 4)
+        {
+            firedStanding.Add((new BlockPos(standing[i], standing[i + 1], standing[i + 2], Pos?.dimension ?? 0), standing[i + 3]));
+        }
     }
 
     public override void ToTreeAttributes(ITreeAttribute tree)
@@ -1643,6 +1831,10 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         // Only when there is one: a StringAttribute holding null throws on serialization, which
         // takes the whole savegame write down rather than just this kiln.
         if (litByUid != null) tree.SetString("litByUid", litByUid);
+
+        var standing = new List<int>();
+        foreach (var (at, blockId) in firedStanding) standing.AddRange(new[] { at.X, at.Y, at.Z, blockId });
+        tree["firedStanding"] = new IntArrayAttribute(standing.ToArray());
     }
 
     public override void GetBlockInfo(IPlayer forPlayer, StringBuilder dsc)

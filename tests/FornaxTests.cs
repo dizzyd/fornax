@@ -805,6 +805,129 @@ public class FornaxTests
     }
 
     /// <summary>
+    /// A melting point that no kiln could reach is not a firing temperature, and the ware fires.
+    ///
+    /// Vanilla lets a firepit fire pottery when allowOpenFireFiring is on, provided the ware has
+    /// a melting point at all - so a mod that wants its ware kept out of an open fire gives it
+    /// one nothing reaches. Freeform Clay Sculpting says 9999 on every raw sculpture. Neither
+    /// vanilla kiln looks at the number, so the pit kiln fires them; this one read it as a
+    /// requirement and refused every sculpture as too cold.
+    ///
+    /// Raw brick stands in for the sculpture, which keeps this in the ordinary suite; the real
+    /// thing is in CompatTests.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task AMeltingPointNoKilnCouldReachIsNotAFiringTemperature()
+    {
+        var brick = Sapi.World.GetItem(new AssetLocation("game:rawbrick-blue"));
+        int meltsAt = brick.CombustibleProps.MeltingPoint;
+
+        try
+        {
+            brick.CombustibleProps.MeltingPoint = 9999;
+
+            BuildKiln();
+            LoadWare(0, 0, "game:rawbrick-blue", 12);
+            Fuel("game:firewood", 32);
+            await Ticks(2);
+            await Tick3s();
+
+            var be = Be();
+            Log($"melting point 9999 -> wares={be.CountWares()}, tooCold={be.FirstTooColdOnGrate()?.Collectible?.Code}");
+            Assert.Equal(12, be.CountWares(), "9999 says 'not in an open fire', not 'needs 9999 degrees'");
+            Assert.Null(be.FirstTooColdOnGrate());
+
+            be.TryIgnite(null);
+            for (int i = 0; i < 10 && be.Lit; i++)
+            {
+                await Hours(3);
+                await Tick3s();
+            }
+
+            var fired = World.BE<BlockEntityGroundStorage>(Ware(0, 0)).Inventory[0].Itemstack;
+            Log($"after firing: {fired?.StackSize}x {fired?.Collectible?.Code}");
+            Assert.Equal("game:burnedbrick-gray", fired?.Collectible?.Code?.ToString());
+        }
+        finally
+        {
+            brick.CombustibleProps.MeltingPoint = meltsAt;
+        }
+    }
+
+    /// <summary>
+    /// The line is at 1200 exactly: a ware melting at 1200 is held to it, one at 1201 is not.
+    ///
+    /// That makes a real requirement over 1200 fire cold - accepted when the line was drawn,
+    /// since nothing tells such a ware from one using its melting point to keep out of a
+    /// firepit. Pinned so that moving it is a decision rather than an accident.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task TheLineIsAtTwelveHundred()
+    {
+        var brick = Sapi.World.GetItem(new AssetLocation("game:rawbrick-blue"));
+        int meltsAt = brick.CombustibleProps.MeltingPoint;
+
+        try
+        {
+            BuildKiln();
+            LoadWare(0, 0, "game:rawbrick-blue", 12);
+            Fuel("game:firewood", 32);   // 950 in the chamber
+            await Ticks(2);
+
+            foreach (var (point, fires) in new[] { (1200, false), (1201, true) })
+            {
+                brick.CombustibleProps.MeltingPoint = point;
+                await Tick3s();
+
+                var be = Be();
+                Log($"melting point {point} -> wares={be.CountWares()}, tooCold={be.FirstTooColdOnGrate() != null}");
+                Assert.Equal(fires ? 12 : 0, be.CountWares(), $"melting point {point}");
+                Assert.Equal(!fires, be.FirstTooColdOnGrate() != null, $"melting point {point}: the too-cold warning");
+            }
+        }
+        finally
+        {
+            brick.CombustibleProps.MeltingPoint = meltsAt;
+        }
+    }
+
+    /// <summary>
+    /// Where "no kiln could reach" starts is fixed, not read from ChamberMaxTemperature.
+    ///
+    /// Tied to the config, an admin who capped the chamber at 800 would find every raw brick -
+    /// 850 - suddenly over the line, read as a sentinel, and fired in a chamber too cool for it.
+    /// That is the one thing the too-cold check exists to stop.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task ACoolerChamberCapDoesNotMoveTheLine()
+    {
+        int max = Cfg.ChamberMaxTemperature;
+
+        try
+        {
+            Cfg.ChamberMaxTemperature = 800;
+
+            BuildKiln();
+            LoadWare(0, 0, "game:rawbrick-blue", 12);   // melts at 850
+            Fuel("game:firewood", 32);
+            await Ticks(2);
+            await Tick3s();
+
+            var be = Be();
+            be.ChamberVersus(World.Stack("game:rawbrick-blue", 1), out int reaches, out int needs);
+            Log($"chamber capped at 800 -> reaches={reaches}, needs={needs}, wares={be.CountWares()}");
+
+            Assert.Equal(800, reaches);
+            Assert.Equal(0, be.CountWares(), "850 is a real temperature and an 800 chamber does not reach it");
+            Assert.NotNull(be.FirstTooColdOnGrate(), "and the kiln says so");
+        }
+        finally
+        {
+            Cfg.ChamberMaxTemperature = max;
+        }
+    }
+
+    /// <summary>
     /// The beehive kiln has no lime recipe of its own either, and its gate takes the same kind
     /// of attribute. Tagging is all it needs - no Harmony patch, and nothing taken away from
     /// vanilla, which is the difference between this and how BulkQuicklime does it.
