@@ -6,7 +6,7 @@
 #
 # A green run of the suite on its own proves less than it looks. Three defects in this mod were
 # invisible with fornax loaded alone and obvious the moment a real mod was in the world, and two
-# more only showed up under a non-default config. So: five mod sets x the whole suite, then the
+# more only showed up under a non-default config. So: six mod sets x the whole suite, then the
 # startup path at six settings.
 #
 # Everything is provisioned with cairn, so a fresh box needs nothing but a checkout of vstestkit
@@ -56,6 +56,8 @@ pack fornaxcompat bulkquicklime kilnshelves ceramicbucketbarrel bricklayers dens
 pack cfgprobe     configlib
 # xskillsfork rather than xskills: the fork is what is published for 1.22, and it pulls xlibfork.
 pack xskills      xskillsfork
+# ConfigKit on its own: it stands down when configlib is installed, so it cannot share set B.
+pack ckprobe      configkit
 PROVISION
 
 echo
@@ -66,13 +68,14 @@ cd ~/vstestkit-fornax
 CFG=~/.cairn/packs/cfgprobe/Mods
 COMPAT=~/.cairn/packs/fornaxcompat/Mods
 XSKILLS=~/.cairn/packs/xskills/Mods
+CONFIGKIT=~/.cairn/packs/ckprobe/Mods
 
 bash scripts/stop.sh >/dev/null 2>&1 || true
 
 set_run() {
     label="$1"; shift
     echo "---- $label"
-    bash scripts/run.sh ~/mods/fornax/tests --mod ~/mods/fornax/fornax --client "$@" 2>&1 \
+    bash scripts/run.sh mods/fornax/tests --mod mods/fornax/fornax --client "$@" 2>&1 \
         | grep -E "^(FAIL|err)|passed" | sed 's/^/     /'
 }
 
@@ -81,6 +84,7 @@ set_run "B  + configlib + vsimgui"  --mods "$CFG"
 set_run "C  + the report's mods"    --mods "$COMPAT"
 set_run "D  + xskills + xlib"       --mods "$XSKILLS"
 set_run "E  everything"             --mods "$CFG:$COMPAT:$XSKILLS"
+set_run "F  + configkit"            --mods "$CONFIGKIT"
 MODSETS
 
 echo
@@ -97,7 +101,7 @@ export VSTK_KEEP=1
 bash scripts/stop.sh >/dev/null 2>&1 || true
 
 # a first boot to generate the config, so there is something to edit
-bash scripts/run.sh ~/mods/fornax/tests --mod ~/mods/fornax/fornax --filter BehaviourMatchesWhatever >/dev/null 2>&1 || true
+bash scripts/run.sh mods/fornax/tests --mod mods/fornax/fornax --filter BehaviourMatchesWhatever >/dev/null 2>&1 || true
 bash scripts/stop.sh >/dev/null 2>&1 || true
 
 perm() {
@@ -113,7 +117,7 @@ cfg["RespectMaxFireable"] = sys.argv[5] == "T"
 json.dump(cfg, open(path, "w"), indent=2)
 PY
     echo "---- $label  (lime=$lime beehive=$beehive containers=$containers maxFireable=$maxfireable)"
-    bash scripts/run.sh ~/mods/fornax/tests --mod ~/mods/fornax/fornax \
+    bash scripts/run.sh mods/fornax/tests --mod mods/fornax/fornax \
          --filter BehaviourMatchesWhatever 2>&1 \
         | grep -E "^(ok|FAIL|err)|passed|config   :|lime tags:|wares=" | sed 's/^/     /'
     bash scripts/stop.sh >/dev/null 2>&1 || true
