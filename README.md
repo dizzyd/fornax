@@ -169,8 +169,9 @@ anything here. A `fornaxkiln` attribute does the same thing aimed at this kiln, 
 `beehivekiln` where both are present.
 
 What a ware turns into is resolved in this order: `fornaxkiln` first, since that is a statement
-about *this* kiln and whoever set it meant it; then `combustibleProps.smeltedStack`; and
-`beehivekiln` last, only as a fallback for a ware that has nothing else.
+about *this* kiln and whoever set it meant it; then the `FiringByClay` setting, which is the
+server saying the same about a clay; then `combustibleProps.smeltedStack`; and `beehivekiln`
+last, only as a fallback for a ware that has nothing else.
 
 A ware usually sits in a ground-storage pile on the grate, but one that is a **block standing on
 the grate** fires too, provided it fires into a block — Freeform Clay Sculpting's sculptures are
@@ -187,6 +188,12 @@ and creams that are a beehive kiln's to give, and a red raw brick would fire to 
 than red. Reading it only when `combustibleProps` is silent leaves every existing ware firing to
 exactly what it fired to before, and still lets a tag-only ware convert rather than sit on the
 grate forever.
+
+A server that does want the beehive colours can have them, one clay at a time: `FiringByClay`
+picks which of a clay's beehive results to use — `"red": "BeehiveTwoDoorsOpen"` fires red clay
+tiles and pottery red. It is a setting rather than a kiln feature, such as doors, on purpose: doors would make the
+beehive kiln's colours a cheaper build away, and the point of this mod is the rung below it. See
+[docs/CONFIG.md](docs/CONFIG.md#fired-colour-by-clay) for the full table.
 
 ### Lime
 
@@ -208,6 +215,7 @@ names is not a switch.
 | `FireLimeInBeehiveKiln` | `false` | tags lime for the **vanilla** beehive kiln too, which has no lime recipe of its own. Adds an attribute rather than taking anything away, so it needs no Harmony patch. Off because vanilla draws a clean line — `fire` wares go in a kiln, everything else including `cook` goes in a firepit — and bending that inside this mod is one thing, bending it inside a vanilla block for everyone who installs the mod is another |
 | `FireContainersInChamber` | `false` | read wares out of any container in the chamber, and out of the headspace course as well as the grate. This is what makes Stackable Kiln Shelves work, and it is off because shelves are a capacity multiplier this kiln is not costed for |
 | `RespectMaxFireable` | `false` | cap each pile at the ware's own vanilla `maxFireable`, as a pit kiln does — raw brick 12 rather than a full pile of 24. Off because tripling the fuel cost was the correction the kiln needed; this is the tighter version for anyone who wants it |
+| `FiringByClay` | empty | per clay colour, fire to one of a beehive kiln's colours rather than a pit kiln's — `"red": "BeehiveTwoDoorsOpen"` fires red clay tiles and pottery red and leaves blue and fire clay alone. Bricks and shingles have tables of their own; see [docs/CONFIG.md](docs/CONFIG.md#fired-colour-by-clay) |
 | `GrantXSkillsExperience` | `true` | credit a firing to whoever lit the kiln, in XSkills' Pottery skill. Does nothing when XSkills is absent |
 | `XSkillsExperienceVsBeehiveKiln` | `0.75` | what a full firing here earns in that skill, against a full beehive kiln firing |
 | `BrickFiringEnergyHours` | `48` | fuel energy one firing costs in the **brick** kiln, against `FiringEnergyHours` 60 for the mud one |
@@ -452,7 +460,8 @@ at 600, so a world running it should set 600 here. That is the floor of the usef
 chamber then reaches 850 °C, exactly what raw brick melts at.
 
 Wares convert through `combustibleProps.SmeltedStack`, so every modded clay ware works with no
-coordination — and the beehive kiln keeps its exclusive palette of fired colours.
+coordination — and, unless a server sets `FiringByClay`, the beehive kiln keeps its exclusive
+palette of fired colours.
 
 ## Opening it early
 

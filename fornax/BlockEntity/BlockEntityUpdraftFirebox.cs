@@ -1054,10 +1054,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     }
 
     /// <summary>
-    /// What a ware comes out as, in the order the three sources are trusted.
+    /// What a ware comes out as, in the order the sources are trusted.
     ///
     /// "fornaxkiln" first, because it is a statement about this kiln specifically: whoever set
-    /// it meant it. Then combustibleProps, which is what the ware already said it becomes.
+    /// it meant it. Then <see cref="FornaxConfig.FiringByClay"/>, which is the server saying the
+    /// same about a clay. Then combustibleProps, which is what the ware already said it becomes.
     ///
     /// "beehivekiln" last, and only as a fallback for a ware that has nothing else - which is
     /// the whole reason this ordering is not the obvious one. That attribute is keyed 0-3 by how
@@ -1074,10 +1075,74 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         var own = raw.Collectible.Attributes?["fornaxkiln"];
         if (own?.Exists == true && ResolveTagged(own) is ItemStack named) return named;
 
+        if (BeehiveKeyFor(raw) is string key && ResolveTagged(raw.Collectible.Attributes?["beehivekiln"]?[key]) is ItemStack coloured)
+        {
+            return coloured;
+        }
+
         if (props?.SmeltedStack?.ResolvedItemstack != null) return props.SmeltedStack.ResolvedItemstack;
 
         var beehive = raw.Collectible.Attributes?["beehivekiln"];
         return beehive?.Exists == true ? ResolveTagged(beehive["0"]) : null;
+    }
+
+    /// <summary>
+    /// The "beehivekiln" key the config picks for this ware's clay, or null for a pit kiln's
+    /// colour.
+    ///
+    /// Keys are matched without regard to case, since they are typed by hand - which lets one
+    /// clay be listed twice, as "red" and "RED", through the file or the settings screen alike.
+    /// Nothing says which of the two was meant, so neither is used: that clay fires as it would
+    /// with no entry, and the server log says why.
+    /// </summary>
+    private string BeehiveKeyFor(ItemStack raw)
+    {
+        var byClay = Cfg.FiringByClay;
+        if (byClay == null || byClay.Count == 0) return null;
+
+        if (FornaxModSystem.OurBeehiveTags.Contains(raw.Collectible.Code)) return null;
+
+        var variant = raw.Collectible.Variant;
+        string clay = variant?["color"] ?? variant?["type"];
+        if (clay == null) return null;
+
+        string matched = null;
+        ClayFiring firing = ClayFiring.PitKiln;
+
+        foreach (var (name, choice) in byClay)
+        {
+            if (!string.Equals(name, clay, StringComparison.OrdinalIgnoreCase)) continue;
+
+            if (matched != null)
+            {
+                WarnDuplicateClay(clay, matched, name);
+                return null;
+            }
+
+            matched = name;
+            firing = choice;
+        }
+
+        return firing switch
+        {
+            ClayFiring.BeehiveDoorsClosed => "0",
+            ClayFiring.BeehiveOneDoorOpen => "1",
+            ClayFiring.BeehiveTwoDoorsOpen => "2",
+            ClayFiring.BeehiveThreeDoorsOpen => "3",
+            _ => null,
+        };
+    }
+
+    /// <summary>Clays already reported as listed twice, so each is said once rather than per ware per firing.</summary>
+    private static readonly HashSet<string> warnedDuplicateClays = new(StringComparer.OrdinalIgnoreCase);
+
+    private void WarnDuplicateClay(string clay, string first, string second)
+    {
+        if (!warnedDuplicateClays.Add(clay)) return;
+
+        Api.World.Logger.Warning("[fornax] FiringByClay lists clay '{0}' twice, as '{1}' and '{2}'. " +
+            "Keys ignore case, so there is no telling which was meant: {0} clay fires to its pit kiln colour " +
+            "until one of them is removed.", clay, first, second);
     }
 
     private ItemStack ResolveTagged(JsonObject json)

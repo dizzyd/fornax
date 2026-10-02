@@ -97,10 +97,10 @@ public class FornaxTests
 
     private static void BuildKiln(bool sealEntrance = true) => Build(Fb(), sealEntrance);
 
-    /// <summary>The firebox does its real work every third one-second tick.</summary>
-    private static async Task Tick3s()
+    /// <summary>The firebox does its real work every third one-second tick. This kiln's, unless told another.</summary>
+    private static async Task Tick3s(BlockPos fb = null)
     {
-        for (int i = 0; i < 3; i++) await World.TickNow(Fb());
+        for (int i = 0; i < 3; i++) await World.TickNow(fb ?? Fb());
     }
 
     private static BlockEntityUpdraftFirebox Be() => World.BE<BlockEntityUpdraftFirebox>(Fb());
@@ -118,9 +118,9 @@ public class FornaxTests
         gs.MarkDirty(true);
     }
 
-    private static void Fuel(string code, int count)
+    private static void Fuel(string code, int count, BlockPos fb = null)
     {
-        var be = Be();
+        var be = World.BE<BlockEntityUpdraftFirebox>(fb ?? Fb());
         be.Inventory[0].Itemstack = World.Stack(code, count);
         be.Inventory[0].MarkDirty();
         be.MarkDirty(true);
@@ -852,6 +852,221 @@ public class FornaxTests
         {
             brick.CombustibleProps.MeltingPoint = meltsAt;
         }
+    }
+
+    // ------------------------------------------------------------------
+    //  Fired colour by clay
+    // ------------------------------------------------------------------
+
+    /// <summary>Fires a kiln built at <paramref name="fb"/> to completion on firewood.</summary>
+    private static async Task FireKilnAt(BlockPos fb)
+    {
+        Fuel("game:firewood", 32, fb);
+        await Tick3s(fb);
+
+        var be = World.BE<BlockEntityUpdraftFirebox>(fb);
+        be.TryIgnite(null);
+        Assert.True(be.Lit, $"the kiln at {fb} should light");
+
+        for (int i = 0; i < 10 && be.Lit; i++)
+        {
+            await Hours(3);
+            await Tick3s(fb);
+        }
+        Assert.True(be.BatchFired, $"the kiln at {fb} should have fired");
+    }
+
+    private static string FiredCode(BlockPos pile) =>
+        World.BE<BlockEntityGroundStorage>(pile).Inventory[0].Itemstack?.Collectible?.Code?.ToString();
+
+    /// <summary>
+    /// An entry for red clay fires every kind of red clay ware to the beehive colour it names,
+    /// and touches nothing else: blue clay keeps its pit-kiln colour, and a red ware with no
+    /// beehive table - this mod's own grate - fires to what it always has.
+    ///
+    /// Doors closed, because tan is the one choice that differs from every red ware's pit-kiln
+    /// result: two doors open fires red brick and red shingle to the red they would have come
+    /// out anyway, which would pass without the override ever being read.
+    ///
+    /// The key is written "Red" on purpose. It is typed by hand, and the clay variant is "red".
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task ARedClayEntryColoursRedClayAndNothingElse()
+    {
+        var wasByClay = Cfg.FiringByClay;
+
+        try
+        {
+            Cfg.FiringByClay = new() { ["Red"] = ClayFiring.BeehiveDoorsClosed };
+
+            BuildKiln();
+            var wares = new (int dx, int dz, string raw, string fired)[]
+            {
+                (-1, -1, "game:claytile-raw-plain-red",  "game:claytile-fired-plain-tan"),
+                ( 0, -1, "game:toolmold-red-raw-axe",    "game:toolmold-tan-fired-axe"),
+                ( 1, -1, "game:bowl-red-raw",            "game:bowl-tan-fired"),
+                (-1,  0, "game:claytile-raw-plain-blue", "game:claytile-fired-plain-blue"),
+                ( 0,  0, "fornax:kilngrateraw-red",      "fornax:kilngrate-red"),
+                // these two name their clay by "type", not "color"
+                ( 1,  0, "game:rawbrick-red",            "game:burnedbrick-tan"),
+                (-1,  1, "game:shingle-raw-red",         "game:shingle-burned-tan"),
+            };
+            foreach (var w in wares) LoadWare(w.dx, w.dz, w.raw, 1);
+            await Ticks(2);
+
+            await FireKilnAt(Fb());
+
+            foreach (var w in wares)
+            {
+                string got = FiredCode(Ware(w.dx, w.dz));
+                Log($"{w.raw} -> {got}");
+                Assert.Equal(w.fired, got, w.raw);
+            }
+        }
+        finally
+        {
+            Cfg.FiringByClay = wasByClay;
+        }
+    }
+
+    /// <summary>
+    /// A clay listed twice in different case is ignored altogether, not settled by whichever
+    /// key the dictionary happens to give first: "RED": PitKiln beside "red": two doors open
+    /// would otherwise do nothing or everything depending on order. Both the file and the
+    /// settings screen can produce it, since a dictionary's keys are case-sensitive and this
+    /// lookup is not.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    public async Task AClayListedTwiceFiresToItsPitKilnColour()
+    {
+        var wasByClay = Cfg.FiringByClay;
+
+        try
+        {
+            Cfg.FiringByClay = new()
+            {
+                ["red"] = ClayFiring.BeehiveTwoDoorsOpen,
+                ["RED"] = ClayFiring.BeehiveDoorsClosed,
+                ["blue"] = ClayFiring.BeehiveDoorsClosed,
+            };
+
+            BuildKiln();
+            LoadWare(0, 0, "game:claytile-raw-plain-red", 4);
+            LoadWare(1, 0, "game:claytile-raw-plain-blue", 4);
+            await Ticks(2);
+
+            await FireKilnAt(Fb());
+
+            Log($"red -> {FiredCode(Ware(0, 0))}, blue -> {FiredCode(Ware(1, 0))}");
+            Assert.Equal("game:claytile-fired-plain-earthyorange", FiredCode(Ware(0, 0)), "neither red entry is used");
+            Assert.Equal("game:claytile-fired-plain-cream", FiredCode(Ware(1, 0)), "and the clay listed once still is");
+        }
+        finally
+        {
+            Cfg.FiringByClay = wasByClay;
+        }
+    }
+
+    /// <summary>
+    /// Each choice picks its own column of each ware's own beehive table, and "pit kiln" is the
+    /// same as no entry at all. Tiles, bricks and shingles, red and blue, because their tables
+    /// are not alike: red brick is red in a pit kiln already, blue brick goes to clinker with all
+    /// three doors open where blue shingle goes to black. These are the tables docs/CONFIG.md
+    /// prints. One kiln per choice, fired one after another, since every kiln reads the setting
+    /// as its firing finishes.
+    /// </summary>
+    [VsTest(TimeoutMs = 300000)]
+    [PlotSize(32, 32)]
+    public async Task EveryChoiceFiresEachWareToItsOwnColour()
+    {
+        var wasByClay = Cfg.FiringByClay;
+
+        string[] raws =
+        {
+            "game:claytile-raw-plain-red", "game:claytile-raw-plain-blue",
+            "game:rawbrick-red", "game:rawbrick-blue",
+            "game:shingle-raw-red", "game:shingle-raw-blue",
+        };
+
+        var choices = new (ClayFiring firing, string[] fired)[]
+        {
+            (ClayFiring.PitKiln, new[] {
+                "game:claytile-fired-plain-earthyorange", "game:claytile-fired-plain-blue",
+                "game:burnedbrick-red", "game:burnedbrick-gray",
+                "game:shingle-burned-red", "game:shingle-burned-black" }),
+            (ClayFiring.BeehiveDoorsClosed, new[] {
+                "game:claytile-fired-plain-tan", "game:claytile-fired-plain-cream",
+                "game:burnedbrick-tan", "game:burnedbrick-cream",
+                "game:shingle-burned-tan", "game:shingle-burned-cream" }),
+            (ClayFiring.BeehiveOneDoorOpen, new[] {
+                "game:claytile-fired-plain-orange", "game:claytile-fired-plain-gray",
+                "game:burnedbrick-orange", "game:burnedbrick-gray",
+                "game:shingle-burned-orange", "game:shingle-burned-gray" }),
+            (ClayFiring.BeehiveTwoDoorsOpen, new[] {
+                "game:claytile-fired-plain-red", "game:claytile-fired-plain-black",
+                "game:burnedbrick-red", "game:burnedbrick-black",
+                "game:shingle-burned-red", "game:shingle-burned-black" }),
+            (ClayFiring.BeehiveThreeDoorsOpen, new[] {
+                "game:claytile-fired-plain-brown", "game:claytile-fired-plain-black",
+                "game:burnedbrick-brown", "game:burnedbrick-clinker",
+                "game:shingle-burned-brown", "game:shingle-burned-black" }),
+        };
+
+        try
+        {
+            for (int i = 0; i < choices.Length; i++)
+            {
+                var fb = P(3 + 6 * i, 1, 12);
+                Build(fb);
+
+                // six piles across the 3x3 grate
+                var piles = new BlockPos[raws.Length];
+                for (int w = 0; w < raws.Length; w++)
+                {
+                    piles[w] = fb.AddCopy(w % 3 - 1, 2, w / 3 - 2);
+                    World.SetBlock("game:groundstorage", piles[w]);
+                    var gs = World.BE<BlockEntityGroundStorage>(piles[w]);
+                    gs.Inventory[0].Itemstack = World.Stack(raws[w], 4);
+                    gs.Inventory[0].MarkDirty();
+                    gs.MarkDirty(true);
+                }
+                await Ticks(2);
+
+                var firing = choices[i].firing;
+                Cfg.FiringByClay = new() { ["red"] = firing, ["blue"] = firing };
+                await FireKilnAt(fb);
+
+                for (int w = 0; w < raws.Length; w++)
+                {
+                    string got = FiredCode(piles[w]);
+                    Log($"{firing}: {raws[w]} -> {got}");
+                    Assert.Equal(choices[i].fired[w], got, $"{firing}: {raws[w]}");
+                }
+            }
+        }
+        finally
+        {
+            Cfg.FiringByClay = wasByClay;
+        }
+    }
+
+    /// <summary>
+    /// The config file holds the choice by name, both ways. Newtonsoft writes an enum as its
+    /// number unless told otherwise, and "red": 3 is a setting nobody can read.
+    /// </summary>
+    [VsTest]
+    public async Task TheFileNamesTheChoice()
+    {
+        var cfg = new FornaxConfig { FiringByClay = new() { ["red"] = ClayFiring.BeehiveTwoDoorsOpen } };
+        string json = Newtonsoft.Json.JsonConvert.SerializeObject(cfg);
+        Log(json.Substring(json.IndexOf("FiringByClay", StringComparison.Ordinal)));
+        Assert.True(json.Contains("\"red\":\"BeehiveTwoDoorsOpen\""), "written by name");
+
+        var read = Newtonsoft.Json.JsonConvert.DeserializeObject<FornaxConfig>(
+            "{ \"FiringByClay\": { \"blue\": \"BeehiveDoorsClosed\" } }");
+        Assert.Equal(ClayFiring.BeehiveDoorsClosed, read.FiringByClay["blue"], "and read back by name");
+
+        await Ticks(1);
     }
 
     /// <summary>

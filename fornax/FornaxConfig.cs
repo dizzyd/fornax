@@ -6,8 +6,11 @@
 // Software Foundation, either version 3 of the License, or (at your option) any
 // later version. See COPYING.LESSER, or <https://www.gnu.org/licenses/>.
 
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 namespace Fornax;
 
@@ -273,6 +276,32 @@ public class FornaxConfig
     [Description("Respect each ware's own maxFireable cap, as a pit kiln does. Off lets a full ground storage pile fire at once.")]
     public bool RespectMaxFireable = false;
 
+    /// <summary>
+    /// Per clay colour, fire to one of a beehive kiln's colours rather than a pit kiln's.
+    ///
+    /// Vanilla gives every clay ware two answers: combustibleProps, which is what a pit kiln
+    /// makes of it, and a "beehivekiln" table keyed by how many of that kiln's three side doors
+    /// stand open. For tiles and pottery that is earthy orange against tan, orange, red or brown
+    /// in red clay. This kiln reads the first, so that the colours stay the beehive kiln's to
+    /// give. An entry here is a server choosing otherwise for one clay: "red": BeehiveTwoDoorsOpen
+    /// fires red clay tiles, molds and wares to red, and leaves blue and fire clay as they were.
+    ///
+    /// Not every ware's two answers line up that way - red brick and red shingle are already red
+    /// in a pit kiln, and blue brick with all three doors open is clinker - so the result is
+    /// whatever that ware's own beehive table says; docs/CONFIG.md has the tables.
+    ///
+    /// A choice, not a colour, because one choice is a different colour for each clay - two
+    /// doors open is red for red clay and black for blue. The clay is the raw ware's "color"
+    /// variant, or its "type" where it has none, which is how raw brick and shingle name it. A
+    /// ware without a beehive table for that choice fires as it would have anyway. Keys ignore
+    /// case; a clay listed twice in different case is ignored, and the server log says so.
+    /// </summary>
+    [Category("What it fires")]
+    [Description("Per clay colour (red, blue, fire, or a mod's clay), fire to a beehive kiln's colour instead of a pit kiln's. " +
+                 "Red clay tiles and pottery: doors closed tan, one open orange, two red, three brown; " +
+                 "blue: cream, gray, black, black. Bricks and shingles differ - see docs/CONFIG.md.")]
+    public Dictionary<string, ClayFiring> FiringByClay = new();
+
     // --- other mods --------------------------------------------------------
 
     /// <summary>
@@ -307,4 +336,22 @@ public class FornaxConfig
     [Description("What a full firing here earns in XSkills' Pottery skill, against a full beehive kiln firing.")]
     [Range(0, 4)]
     public float XSkillsExperienceVsBeehiveKiln = 0.75f;
+}
+
+/// <summary>
+/// What a clay fires to: a pit kiln's colour, or the colour a beehive kiln gives it with so many
+/// of its side doors open. See <see cref="FornaxConfig.FiringByClay"/>.
+///
+/// Pit kiln first and zero, because it is what an entry is added as and what every clay without
+/// one does. Stored by name. The numbers mean nothing beyond that ordering: which beehive table
+/// key each choice reads is spelled out where it is read, in BeehiveKeyFor.
+/// </summary>
+[JsonConverter(typeof(StringEnumConverter))]
+public enum ClayFiring
+{
+    PitKiln = 0,
+    BeehiveDoorsClosed = 1,
+    BeehiveOneDoorOpen = 2,
+    BeehiveTwoDoorsOpen = 3,
+    BeehiveThreeDoorsOpen = 4,
 }

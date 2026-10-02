@@ -98,6 +98,51 @@ again. It rewards being run back to back.
 | `FireLimeInBeehiveKiln` | off | Tag lime for the vanilla beehive kiln too, which has no lime recipe of its own. |
 | `FireContainersInChamber` | off | Read wares out of any container in the chamber and out of the headspace course. Makes kiln shelves work. |
 | `RespectMaxFireable` | off | Respect each ware's own `maxFireable` cap, as a pit kiln does. Off lets a full ground-storage pile fire at once. |
+| `FiringByClay` | empty | Per clay colour, fire to one of a beehive kiln's colours instead of a pit kiln's. See below. |
+
+### Fired colour by clay
+
+Vanilla clay wares have two sets of fired colours: what a pit kiln makes of them, and what a
+beehive kiln makes of them depending on how many of its three side doors stand open. This kiln
+gives the pit-kiln colours, so the others stay the beehive kiln's to give. `FiringByClay`
+lets a server choose otherwise, one clay at a time:
+
+```json
+"FiringByClay": { "red": "BeehiveTwoDoorsOpen" }
+```
+
+fires red clay tiles, molds and wares to red, and leaves blue and fire clay as they were. Each
+choice reads that ware's own beehive table, and the tables are not all alike.
+
+**Tiles, molds and pottery** — bowls, pots, crocks, jugs, storage vessels, planters, flowerpots,
+oil lamps, crucibles, watering cans, tool and ingot molds:
+
+| choice | red clay | blue clay | fire clay |
+|---|---|---|---|
+| `PitKiln` (the same as no entry) | earthy orange | blue | fire |
+| `BeehiveDoorsClosed` | tan | cream | fire |
+| `BeehiveOneDoorOpen` | orange | gray | fire |
+| `BeehiveTwoDoorsOpen` | red | black | fire |
+| `BeehiveThreeDoorsOpen` | brown | black | fire |
+
+**Raw brick and shingle** fire to red and black already in a pit kiln, so `"red":
+"BeehiveTwoDoorsOpen"` changes nothing for red brick or red shingle:
+
+| choice | red brick | blue brick | red shingle | blue shingle |
+|---|---|---|---|---|
+| `PitKiln` (the same as no entry) | red | gray | red | black |
+| `BeehiveDoorsClosed` | tan | cream | tan | cream |
+| `BeehiveOneDoorOpen` | orange | gray | orange | gray |
+| `BeehiveTwoDoorsOpen` | red | black | red | black |
+| `BeehiveThreeDoorsOpen` | brown | clinker | brown | black |
+
+Fire clay is the same whatever the choice.
+
+The key is the raw ware's clay as its code names it — `red`, `blue`, `fire`, or a mod's own,
+such as Clayworks' `azure`. Case does not matter, so list each clay once: a clay that appears
+twice, as `red` and `RED`, is ignored altogether — it fires to its pit-kiln colour, and the
+server log names both keys. A ware with no beehive colours, which includes this mod's own grates
+and many modded wares, fires as it always would.
 
 ## Other mods
 
@@ -117,6 +162,9 @@ again. It rewards being run back to back.
 temperature still has to reach it. `DraftTemperatureBonus` is what the chimney adds. Only
 wares melting at up to 1200 °C are held to the chamber temperature at all, so raising it past
 1200 makes the chamber hotter without changing what it will fire.
+
+**Fire red clay tiles and pottery red** — `"FiringByClay": { "red": "BeehiveTwoDoorsOpen" }`. See
+[Fired colour by clay](#fired-colour-by-clay).
 
 **Allow poorer fuels** — lower `MinFuelBurnTemperature`. They will fire the chamber less
 hot, so check your wares still reach their firing temperature.
