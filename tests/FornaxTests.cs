@@ -1901,7 +1901,7 @@ public class FornaxTests
         Assert.True(be.StructureComplete, "structure should be complete before we try to light it");
 
         // 1. put fuel in the way a player does: hold it, right-click the firebox
-        await Player.StandNear(Fb().AddCopy(0, 0, 2));
+        await Player.StandNear(Fb());
         await Player.Hold("game:firewood", 16);
         await Ticks(2);
 
@@ -1948,7 +1948,7 @@ public class FornaxTests
         var be = Be();
         Assert.True(be.StructureComplete);
 
-        await Player.StandNear(Fb().AddCopy(0, 0, 3));
+        await Player.StandNear(Fb());
         await Ticks(5);
 
         await Player.Hold("game:firewood", 16);
@@ -2014,7 +2014,7 @@ public class FornaxTests
             Assert.True(be.StructureComplete);
             int fuelled = be.FuelItemCount();
 
-            await Player.StandNear(Fb().AddCopy(0, 0, 3));
+            await Player.StandNear(Fb());
             await Ticks(5);
             await Player.Hold("game:firestarter", 1);
             await Ticks(5);
@@ -2054,7 +2054,7 @@ public class FornaxTests
         BuildKiln();
         LoadWare(0, 0, "game:rawbrick-blue", 8);
         Fuel("game:firewood", 32);
-        await Player.StandNear(Fb().AddCopy(0, 0, 3));
+        await Player.StandNear(Fb());
         await Ticks(2);
         await Tick3s();
 
@@ -2216,7 +2216,7 @@ public class FornaxTests
         await Ticks(5);
         Assert.True(be.CanIgnite);
 
-        await Player.StandNear(Fb().AddCopy(0, 0, 3));
+        await Player.StandNear(Fb());
         await Player.Hold("game:torch-basic-lit-up", 1);
         await Ticks(5);
 

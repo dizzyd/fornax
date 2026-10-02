@@ -740,7 +740,7 @@ public class BrickKilnTests
         LoadWare(0, 0, "game:rawbrick-blue", 8);
         await Ticks(2);
 
-        await Player.StandNear(Fb().AddCopy(0, 0, 2));
+        await Player.StandNear(Fb());
         await Player.Hold("game:clay-blue", 8);
         var held = Sapi.World.AllOnlinePlayers[0].InventoryManager.ActiveHotbarSlot;
 
@@ -820,7 +820,7 @@ public class BrickKilnTests
         var be = Be();
         Assert.True(!be.StructureComplete, "an open wicket is an open kiln");
 
-        await Player.StandNear(Fb().AddCopy(0, 0, 2));
+        await Player.StandNear(Fb());
         await Player.Hold("game:clay-blue", 4);
 
         await Interact.UseBlock(Wicket(2));
