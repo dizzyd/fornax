@@ -2845,14 +2845,16 @@ public class FornaxTests
     [VsTest(TimeoutMs = 120000)]
     public async Task HandbookEntryResolvesAllOfItsLinks()
     {
-        // Read the page config the game reads, so a mismatch between it and the lang file
-        // fails here rather than rendering the raw key in-game.
+        // The first Init has no format arguments. The hook supplies the prose afterward,
+        // so the JSON must not resolve the parameterized lang entry itself.
         var page = Sapi.Assets.TryGet("fornax:config/handbook/50-fornax.json")
             ?.ToObject<Dictionary<string, string>>();
         Assert.NotNull(page);
+        Assert.Equal("", page["text"], "the initial page must defer its parameterized text to the hook");
 
         string title = Lang.Get(page["title"]);
-        string text = Lang.Get(page["text"], 0, 0);
+        string text = Lang.Get(FornaxModSystem.HandbookTextKey,
+            Cfg.MinFuelBurnTemperature, Cfg.ShatterSafeTemperature, Cfg.FireboxBurnRadius);
         Log($"page title key = {page["title"]}");
 
         Assert.True(!title.Contains("gamemechanicinfo"), "title lang key is missing");
@@ -2915,15 +2917,17 @@ public class FornaxTests
         Assert.Contains(filled, "cooler than 600 degrees is refused");
         Assert.Contains(filled, "nothing at 400 degrees");
         Assert.Contains(filled, "about 2.5 blocks out from the mouth");
-        Assert.True(!filled.Contains("{0}") && !filled.Contains("{1}") && !filled.Contains("{2}"), "and nothing left unfilled");
+        Assert.True(!System.Text.RegularExpressions.Regex.IsMatch(filled, @"\{\d+(?::[^}]*)?\}"), "and nothing left unfilled, including formatted placeholders");
         Assert.True(!filled.Contains("650 degrees"), "the default must not survive a changed config");
 
         await Ticks(1);
     }
 
     /// <summary>
-    /// The same thing through the wiring the game actually uses: the page as the handbook dialog
-    /// loads it, handed to the hook fornax registers on ModSystemSurvivalHandbook.
+    /// The same thing through the wiring the game actually uses: initialize the JSON page
+    /// without arguments, then hand it to the hook registered on ModSystemSurvivalHandbook.
+    /// Neither pass should log formatting errors; checking only the final text misses the
+    /// failed first translation because Lang.Get returns its unformatted input on failure.
     ///
     /// The lang test above passes even if the page config names a different code, or if
     /// GuiHandbookTextPage stops taking already-formatted text - Init resolves Text through
@@ -2935,9 +2939,13 @@ public class FornaxTests
     public async Task TheHandbookHookFillsInTheRealPage()
     {
         int floor = Cfg.MinFuelBurnTemperature;
+        int safe = Cfg.ShatterSafeTemperature;
+        float radius = Cfg.FireboxBurnRadius;
         try
         {
             Cfg.MinFuelBurnTemperature = 600;
+            Cfg.ShatterSafeTemperature = 400;
+            Cfg.FireboxBurnRadius = 2.5f;
 
             await OnClient();
 
@@ -2952,23 +2960,48 @@ public class FornaxTests
                 .FirstOrDefault(p => p.PageCode == FornaxModSystem.HandbookPageCode);
             Assert.NotNull(ours, "the page config and FornaxModSystem must agree on the page code");
 
-            ours.Init(capi);   // what GuiDialogSurvivalHandbook does before the hook runs
-            string before = ours.Text;
+            var messages = new List<string>();
+            int clientThread = Environment.CurrentManagedThreadId;
+            void CaptureLog(EnumLogType type, string message, params object[] args)
+            {
+                // Other systems may log on background threads while the test runs.
+                if (Environment.CurrentManagedThreadId == clientThread &&
+                    (type == EnumLogType.Error || type == EnumLogType.Warning))
+                    messages.Add(string.Format(message, args));
+            }
 
-            capi.ModLoader.GetModSystem<FornaxModSystem>().FillInHandbookNumbers(pages);
-            string after = ours.Text;
+            string before;
+            string after;
+            capi.Logger.EntryAdded += CaptureLog;
+            try
+            {
+                ours.Init(capi);   // what GuiDialogSurvivalHandbook does before the hook runs
+                before = ours.Text;
+
+                capi.ModLoader.GetModSystem<FornaxModSystem>().FillInHandbookNumbers(pages);
+                after = ours.Text;
+            }
+            finally
+            {
+                capi.Logger.EntryAdded -= CaptureLog;
+            }
 
             await OnServer();
 
-            Log($"before: placeholder={before.Contains("{0}")}; after: 600={after.Contains("cooler than 600 degrees")}");
+            if (messages.Count > 0) Log(string.Join("\n", messages));
 
-            Assert.Contains(before, "{0}", "unfilled, the page carries the placeholder");
+            Assert.Equal(0, messages.Count, "initializing and filling the page must not log translation or VTML errors");
+            Assert.Equal("", before, "the first Init leaves text for the hook to fill");
             Assert.Contains(after, "cooler than 600 degrees is refused", "and the hook puts the setting in");
-            Assert.True(!after.Contains("{0}"), "with nothing left over");
+            Assert.Contains(after, "nothing at 400 degrees");
+            Assert.Contains(after, "about 2.5 blocks out from the mouth");
+            Assert.True(!System.Text.RegularExpressions.Regex.IsMatch(after, @"\{\d+(?::[^}]*)?\}"), "with no unfilled placeholders");
         }
         finally
         {
             Cfg.MinFuelBurnTemperature = floor;
+            Cfg.ShatterSafeTemperature = safe;
+            Cfg.FireboxBurnRadius = radius;
         }
     }
 

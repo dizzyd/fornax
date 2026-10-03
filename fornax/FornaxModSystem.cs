@@ -101,10 +101,12 @@ public class FornaxModSystem : ModSystem
     /// digits to keep a rarely-changed default honest is a poor trade. The firebox itself reports
     /// its live numbers on every look, which is where a number that moves belongs.
     ///
-    /// GuiHandbookTextPage.Init resolves Text through Lang.Get only when it is under 255
-    /// characters, and treats anything longer as the finished VTML - so handing it the already
-    /// formatted string and re-running Init composes the interpolated text without a second
-    /// lookup. The pages are built once with the handbook dialog, so a value changed mid-session
+    /// The JSON page starts with empty Text because the handbook calls Init before this hook,
+    /// and that first lookup supplies no format arguments. GuiHandbookTextPage.Init resolves
+    /// Text through Lang.Get only when it is under 255 characters, and treats anything longer
+    /// as the finished VTML - so handing it the already formatted string and re-running Init
+    /// composes the interpolated text without a second lookup. The pages are built once with
+    /// the handbook dialog, so a value changed mid-session
     /// through ConfigKit shows up the next time the game loads rather than at once.
     /// </summary>
     public void FillInHandbookNumbers(List<GuiHandbookPage> pages)
