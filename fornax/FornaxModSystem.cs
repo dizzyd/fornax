@@ -106,8 +106,8 @@ public class FornaxModSystem : ModSystem
     /// Text through Lang.Get only when it is under 255 characters, and treats anything longer
     /// as the finished VTML - so handing it the already formatted string and re-running Init
     /// composes the interpolated text without a second lookup. The pages are built once with
-    /// the handbook dialog, so a value changed mid-session
-    /// through ConfigKit shows up the next time the game loads rather than at once.
+    /// the handbook dialog, so a value changed mid-session through ConfigKit shows up the next
+    /// time the game loads rather than at once.
     /// </summary>
     public void FillInHandbookNumbers(List<GuiHandbookPage> pages)
     {

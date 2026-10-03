@@ -2964,10 +2964,11 @@ public class FornaxTests
             int clientThread = Environment.CurrentManagedThreadId;
             void CaptureLog(EnumLogType type, string message, params object[] args)
             {
-                // Other systems may log on background threads while the test runs.
+                // Other systems may log on background threads while the test runs. A message
+                // with no arguments is already final and may carry literal braces.
                 if (Environment.CurrentManagedThreadId == clientThread &&
                     (type == EnumLogType.Error || type == EnumLogType.Warning))
-                    messages.Add(string.Format(message, args));
+                    messages.Add(args.Length == 0 ? message : string.Format(message, args));
             }
 
             string before;
