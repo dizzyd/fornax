@@ -207,11 +207,39 @@ Tagging happens in `AssetsFinalize` rather than as a JSON patch because patches 
 assets load, before anything can read a config — and a switch that cannot reach the thing it
 names is not a switch.
 
+### Flint, in a sagger
+
+Flint knows what it becomes too — vanilla gives it calcined flint at 1000 °C, one to one — and
+fails the same two clauses lime does. It gets in a different way, and only one: inside a
+**sagger**, a lidded fire clay box (`fornax:sagger`). Vanilla flint itself is left alone. It is
+still not ground storable and still not kiln work in a pile, on a kiln shelf or in anything else
+left on the grate; `IsFireable` asks a slot inside a sagger `BlockEntitySagger.Calcines` instead
+of its usual question.
+
+- The raw sagger is clay-formed from fire clay only, lid and all: a box eight layers deep, then
+  a lid that overhangs it by a voxel and a knob, the way vanilla forms a crock. Ten layers and
+  24 clay. It fires like a grate, one to a pit kiln or nine to this one, into an open sagger.
+- An open sagger takes flint from the hand, one a click or the stack with Ctrl, up to
+  `SaggerCapacity` (16). An empty hand takes the contents back out. Sneak with an empty hand to
+  put the lid on or lift it.
+- **Only a lidded sagger fires.** An open one with flint in it is called out on the firebox
+  ("its lid is off"), not reported as flint the kiln can't fire, which would send the player
+  looking for the wrong fix. Nothing goes in or comes out with the lid on, hoppers included.
+- The lid keeps its contents through a breach. Cracking flint is what calcining is for.
+- Flint wants 1000 °C, and firewood tops out at 950, so it takes peat or charcoal. The usual
+  too-cold warning says so.
+- It earns no XSkills pottery experience. Calcining flint is not pottery.
+
+The lid is the block's `state` variant (`open` / `closed`), so a lidded sagger needs no renderer
+of its own, and `ExchangeBlock` keeps the block entity and its contents across the swap. A sagger
+always drops and picks as an open one.
+
 ### Config
 
 | setting | default | |
 |---|---|---|
 | `FireLime` | `true` | lime fires into quicklime on the grate |
+| `SaggerCapacity` | `16` | flint one sagger holds. Nine saggers stand on a grate, so 144 flint a firing |
 | `FireLimeInBeehiveKiln` | `false` | tags lime for the **vanilla** beehive kiln too, which has no lime recipe of its own. Adds an attribute rather than taking anything away, so it needs no Harmony patch. Off because vanilla draws a clean line — `fire` wares go in a kiln, everything else including `cook` goes in a firepit — and bending that inside this mod is one thing, bending it inside a vanilla block for everyone who installs the mod is another |
 | `FireContainersInChamber` | `false` | read wares out of any container in the chamber, and out of the headspace course as well as the grate. This is what makes Stackable Kiln Shelves work, and it is off because shelves are a capacity multiplier this kiln is not costed for |
 | `RespectMaxFireable` | `false` | cap each pile at the ware's own vanilla `maxFireable`, as a pit kiln does — raw brick 12 rather than a full pile of 24. Off because tripling the fuel cost was the correction the kiln needed; this is the tighter version for anyone who wants it |

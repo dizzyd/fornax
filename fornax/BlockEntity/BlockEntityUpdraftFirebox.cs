@@ -515,7 +515,15 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     //  Wares
     // =====================================================================
 
-    private bool IsFireable(ItemSlot slot) => IsFireable(slot.Itemstack, PropsOf(slot));
+    private bool IsFireable(ItemSlot slot) => IsFireable(slot, PropsOf(slot));
+
+    /// <summary>
+    /// A slot inside a sagger answers to the sagger instead: flint, lidded, and nothing else.
+    /// Flint fails all three clauses below, which is what keeps it out of every other holder -
+    /// unless some mod tags it, and then the sagger is no longer the only way in.
+    /// </summary>
+    private bool IsFireable(ItemSlot slot, CombustibleProperties props) =>
+        slot is ItemSlotSagger ? BlockEntitySagger.Calcines(slot) : IsFireable(slot.Itemstack, props);
 
     private bool IsFireable(ItemStack stack, CombustibleProperties props)
     {
@@ -573,7 +581,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// precisely the thing <see cref="FornaxConfig.FireContainersInChamber"/> exists to decide.
     /// </summary>
     private bool IsWareHolder(BlockEntity be) =>
-        be is BlockEntityContainer && (Cfg.FireContainersInChamber || IsPlainGroundStorage(Api, be));
+        be is BlockEntitySagger
+        || be is BlockEntityContainer && (Cfg.FireContainersInChamber || IsPlainGroundStorage(Api, be));
 
     /// <summary>The class name every ordinary ground storage pile is built from.</summary>
     public const string GroundStorageClass = "GroundStorage";
@@ -779,6 +788,10 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
                         return BlockName(block, pos);
                     }
 
+                    // A sagger holds flint or calcined flint and nothing else, and an open one
+                    // is said separately, by HasOpenSaggerOnGrate.
+                    if (be is BlockEntitySagger) continue;
+
                     var inventory = ((BlockEntityContainer)be).Inventory;
 
                     for (int i = 0; i < inventory.Count; i++)
@@ -875,7 +888,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         WalkGrate((storage, slot) =>
         {
             var props = PropsOf(slot);
-            if (IsFireable(slot.Itemstack, props) && !IsOverfull(slot.Itemstack) && !IsTooCold(props, target))
+            if (IsFireable(slot, props) && !IsOverfull(slot.Itemstack) && !IsTooCold(props, target))
             {
                 onWare(storage, slot);
             }
@@ -898,7 +911,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             if (found != null) return;
 
             var props = PropsOf(slot);
-            if (IsFireable(slot.Itemstack, props) && !IsOverfull(slot.Itemstack) && IsTooCold(props, target))
+            if (IsFireable(slot, props) && !IsOverfull(slot.Itemstack) && IsTooCold(props, target))
             {
                 found = slot.Itemstack;
             }
@@ -933,6 +946,22 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         return found;
     }
 
+    /// <summary>
+    /// Whether a sagger on the grate holds flint with its lid off. The flint is not refused for
+    /// what it is, so the usual "can't fire" would send the player looking for the wrong fix.
+    /// </summary>
+    public bool HasOpenSaggerOnGrate()
+    {
+        bool found = false;
+
+        WalkGrate((_, slot) =>
+        {
+            if (slot is ItemSlotSagger sagger && sagger.Owner.NeedsLid) found = true;
+        });
+
+        return found;
+    }
+
     public int CountWares()
     {
         int total = 0;
@@ -954,6 +983,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         int total = 0;
         WalkGrate((_, slot) =>
         {
+            // Flint is never a finished ware: in a sagger left open it is unfireable and unfired.
+            if (slot is ItemSlotSagger && BlockEntitySagger.Takes(slot.Itemstack)) return;
             if (!IsFireable(slot)) total += slot.Itemstack.StackSize;
         });
 
@@ -1027,7 +1058,8 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             slot.Itemstack.StackSize = Math.Max(1, raw.StackSize / ratio);
             slot.Itemstack.Collectible.SetTemperature(Api.World, slot.Itemstack, temperature);
 
-            credited?.Add((storage, slot));
+            // Calcining flint is not pottery, whatever the kiln it happened in.
+            if (slot is not ItemSlotSagger) credited?.Add((storage, slot));
             if (slot is StandingWareSlot ware) standing.Add(ware);
 
             slot.MarkDirty();
@@ -1207,6 +1239,10 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
 
         WalkWares((storage, slot) =>
         {
+            // A lidded sagger is what keeps the cold air off, and cracking is what calcining
+            // flint is for anyway: there is nothing in there to ruin.
+            if (slot is ItemSlotSagger) return;
+
             int lost = 0;
             for (int i = 0; i < slot.Itemstack.StackSize; i++)
             {
@@ -1796,6 +1832,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
             capi.TriggerIngameError(this, "unfireable", Lang.Get("fornax:cannot-fire", unfireable));
         }
 
+        if (HasOpenSaggerOnGrate())
+        {
+            capi.TriggerIngameError(this, "saggeropen", Lang.Get("fornax:sagger-open-in-kiln"));
+        }
+
         var overfull = FirstOverfullOnGrate();
         if (overfull != null)
         {
@@ -1942,6 +1983,7 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         // firing's worth of firewood for nothing.
         string unfireable = FirstUnfireableOnGrate();
         if (unfireable != null) dsc.AppendLine(Lang.Get("fornax:cannot-fire", unfireable));
+        if (HasOpenSaggerOnGrate()) dsc.AppendLine(Lang.Get("fornax:sagger-open-in-kiln"));
 
         var overfull = FirstOverfullOnGrate();
         if (overfull != null)

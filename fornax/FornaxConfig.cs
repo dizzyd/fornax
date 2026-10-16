@@ -228,6 +228,19 @@ public class FornaxConfig
     public bool FireLime = true;
 
     /// <summary>
+    /// How much flint one sagger holds.
+    ///
+    /// Nine saggers stand on a grate, so this is a ninth of a firing's flint. 16 makes a full
+    /// grate 144 flint - more than nine Messy12 piles would hold, which is the trade: the
+    /// saggers have to be made and lidded first. A sagger already holding more than a lowered
+    /// cap keeps it; it just takes no more.
+    /// </summary>
+    [Category("What it fires")]
+    [Description("How much flint one sagger holds. Nine saggers stand on a grate.")]
+    [Range(1, 64)]
+    public int SaggerCapacity = 16;
+
+    /// <summary>
     /// The same for the vanilla beehive kiln, which has no lime recipe of its own either.
     ///
     /// This one reaches outside the mod - it tags a vanilla item so a vanilla block will fire

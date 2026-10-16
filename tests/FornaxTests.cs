@@ -263,7 +263,8 @@ public class FornaxTests
     public async Task GrateClayFormingIsMoreThanOneLayer()
     {
         var recipes = Sapi.GetClayformingRecipes()
-            .Where(r => r.Output?.ResolvedItemstack?.Collectible?.Code?.Domain == "fornax")
+            .Where(r => r.Output?.ResolvedItemstack?.Collectible?.Code?.Domain == "fornax"
+                        && r.Output.ResolvedItemstack.Collectible.Code.Path.StartsWith("kilngrateraw-"))
             .ToList();
 
         // clay-* with three allowed variants expands into one recipe per clay colour

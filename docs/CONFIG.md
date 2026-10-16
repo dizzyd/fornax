@@ -95,6 +95,7 @@ again. It rewards being run back to back.
 | Setting | Default | What it does |
 |---|---|---|
 | `FireLime` | on | Crushed lime fires into quicklime on the grate, two lime to one. |
+| `SaggerCapacity` | 16 | How much flint one sagger holds. Nine saggers stand on a grate. |
 | `FireLimeInBeehiveKiln` | off | Tag lime for the vanilla beehive kiln too, which has no lime recipe of its own. |
 | `FireContainersInChamber` | off | Read wares out of any container in the chamber and out of the headspace course. Makes kiln shelves work. |
 | `RespectMaxFireable` | off | Respect each ware's own `maxFireable` cap, as a pit kiln does. Off lets a full ground-storage pile fire at once. |

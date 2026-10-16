@@ -1,0 +1,144 @@
+{
+	"code": "sagger",
+	"//": "A lidded fireclay box to calcine flint in. Flint goes in with the lid off; only a lidded sagger fires, and the lid keeps its contents through a breach. The lid is the state variant, so picking one up always gives back an open sagger.",
+	"class": "BlockSagger",
+	"entityClass": "Sagger",
+	"variantgroups": [
+		{
+			"code": "state",
+			"states": [
+				"open",
+				"closed"
+			]
+		}
+	],
+	"attributes": {
+		"handbook": {
+			"groupBy": [
+				"sagger-*"
+			]
+		}
+	},
+	"shapeByType": {
+		"*-open": {
+			"base": "fornax:block/sagger-open"
+		},
+		"*-closed": {
+			"base": "fornax:block/sagger-closed"
+		}
+	},
+	"textures": {
+		"clay": {
+			"base": "game:block/clay/hardened/fire"
+		}
+	},
+	"blockmaterial": "Ceramic",
+	"creativeinventoryByType": {
+		"*-open": {
+			"general": [
+				"*"
+			],
+			"decorative": [
+				"*"
+			]
+		}
+	},
+	"replaceable": 300,
+	"resistance": 1.5,
+	"lightAbsorption": 0,
+	"maxStackSize": 4,
+	"sideopaque": {
+		"all": false
+	},
+	"sidesolid": {
+		"all": false
+	},
+	"emitSideAo": {
+		"all": false
+	},
+	"sounds": {
+		"walk": "game:walk/stone",
+		"place": "game:block/ceramicplace",
+		"break": "game:block/ceramicbreak",
+		"hit": "game:block/ceramichit"
+	},
+	"heldTpIdleAnimation": "holdbothhandslarge",
+	"heldRightReadyAnimation": "heldblockready",
+	"heldTpUseAnimation": "twohandplaceblock",
+	"collisionboxByType": {
+		"*-open": {
+			"x1": 0.125,
+			"y1": 0,
+			"z1": 0.125,
+			"x2": 0.875,
+			"y2": 0.5,
+			"z2": 0.875
+		},
+		"*-closed": {
+			"x1": 0.0625,
+			"y1": 0,
+			"z1": 0.0625,
+			"x2": 0.9375,
+			"y2": 0.5625,
+			"z2": 0.9375
+		}
+	},
+	"selectionboxByType": {
+		"*-open": {
+			"x1": 0.125,
+			"y1": 0,
+			"z1": 0.125,
+			"x2": 0.875,
+			"y2": 0.5,
+			"z2": 0.875
+		},
+		"*-closed": {
+			"x1": 0.0625,
+			"y1": 0,
+			"z1": 0.0625,
+			"x2": 0.9375,
+			"y2": 0.625,
+			"z2": 0.9375
+		}
+	},
+	"tpHandTransform": {
+		"translation": {
+			"x": -1.1,
+			"y": -0.75,
+			"z": -0.75
+		},
+		"rotation": {
+			"x": 0,
+			"y": 25,
+			"z": -10
+		},
+		"origin": {
+			"x": 0.5,
+			"y": 0.25,
+			"z": 0.5
+		},
+		"scale": 0.7
+	},
+	"guiTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0.3,
+			"z": 0.5
+		},
+		"rotation": {
+			"x": -22.6,
+			"y": -45.3,
+			"z": 0
+		},
+		"scale": 1.6
+	},
+	"groundTransform": {
+		"origin": {
+			"x": 0.5,
+			"y": 0,
+			"z": 0.5
+		},
+		"scale": 2.5
+	},
+	"materialDensity": 2600
+}

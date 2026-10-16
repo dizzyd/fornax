@@ -151,7 +151,9 @@ public class FornaxModSystem : ModSystem
 
         api.RegisterBlockClass("BlockUpdraftFirebox", typeof(BlockUpdraftFirebox));
         api.RegisterBlockClass("BlockKilnDoor", typeof(BlockKilnDoor));
+        api.RegisterBlockClass("BlockSagger", typeof(BlockSagger));
         api.RegisterBlockEntityClass("UpdraftFirebox", typeof(BlockEntityUpdraftFirebox));
+        api.RegisterBlockEntityClass(BlockEntitySagger.ClassName, typeof(BlockEntitySagger));
 
         RegisterWithConfigKit(api);
         XSkillsPottery.Resolve(api);
