@@ -62,6 +62,14 @@
 		"*-open-*": null,
 		"*": { "x1": 0, "y1": 0, "z1": 0, "x2": 1, "y2": 1, "z2": 1 }
 	},
+	"//selectionbox": "An open panel stands along one edge of its cell, so only that edge is selectable - left at the default full cube it filled the doorway, and nothing on the grate behind it could be clicked. Rotated with the shape.",
+	"selectionboxByType": {
+		"*-open-north": { "x1": 0, "y1": 0, "z1": 0, "x2": 0.21875, "y2": 1, "z2": 1, "rotateY": 0 },
+		"*-open-east": { "x1": 0, "y1": 0, "z1": 0, "x2": 0.21875, "y2": 1, "z2": 1, "rotateY": 270 },
+		"*-open-south": { "x1": 0, "y1": 0, "z1": 0, "x2": 0.21875, "y2": 1, "z2": 1, "rotateY": 180 },
+		"*-open-west": { "x1": 0, "y1": 0, "z1": 0, "x2": 0.21875, "y2": 1, "z2": 1, "rotateY": 90 },
+		"*": { "x1": 0, "y1": 0, "z1": 0, "x2": 1, "y2": 1, "z2": 1 }
+	},
 	"blockmaterial": "Ceramic",
 	"creativeinventoryByType": {
 		"*-open-north": {

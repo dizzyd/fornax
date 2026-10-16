@@ -97,6 +97,29 @@ public class BrickKilnTests
         }
     }
 
+    /// <summary>
+    /// Right-clicks a wicket panel where a player can actually click it: the middle of the
+    /// south face of its selection box. An open panel is a slab along one edge of its cell, so
+    /// the middle of the cell is the doorway, and a click there reaches the grate behind it.
+    /// </summary>
+    public static async Task UsePanel(BlockPos pos)
+    {
+        await OnClient();
+        var box = Capi.World.BlockAccessor.GetBlock(pos).GetSelectionBoxes(Capi.World.BlockAccessor, pos)[0];
+        await OnServer();
+
+        await Interact.LookAt(new Vec3d(pos.X + (box.X1 + box.X2) / 2, pos.Y + (box.Y1 + box.Y2) / 2, pos.Z + box.Z2 - 0.01));
+        await Frames.Wait(5);
+
+        await OnClient();
+        var sel = Capi.World.Player.CurrentBlockSelection?.Position?.Copy();
+        await OnServer();
+        Assert.True(pos.Equals(sel), $"aimed at the panel at {pos} but selected {sel?.ToString() ?? "nothing"}");
+
+        await Input.Click(EnumMouseButton.Right);
+        await Ticks(2);
+    }
+
     private static async Task Tick3s(BlockPos at = null)
     {
         at ??= Fb();
@@ -744,8 +767,8 @@ public class BrickKilnTests
         await Player.Hold("game:clay-blue", 8);
         var held = Sapi.World.AllOnlinePlayers[0].InventoryManager.ActiveHotbarSlot;
 
-        await Interact.UseBlock(Wicket(2));
-        await Interact.UseBlock(Wicket(3));
+        await UsePanel(Wicket(2));
+        await UsePanel(Wicket(3));
         await Ticks(2);
 
         int afterSealing = held.Itemstack.StackSize;
@@ -772,8 +795,8 @@ public class BrickKilnTests
         Assert.Equal(Open, World.BlockCode(Wicket(3)));
 
         // And the panels are still panels, ready for the next one at the same price.
-        await Interact.UseBlock(Wicket(2));
-        await Interact.UseBlock(Wicket(3));
+        await UsePanel(Wicket(2));
+        await UsePanel(Wicket(3));
         await Ticks(2);
 
         Log($"a full cycle: 8 clay -> {held.Itemstack.StackSize}");
@@ -823,7 +846,7 @@ public class BrickKilnTests
         await Player.StandNear(Fb());
         await Player.Hold("game:clay-blue", 4);
 
-        await Interact.UseBlock(Wicket(2));
+        await UsePanel(Wicket(2));
         await Ticks(2);
 
         Log($"after luting: {World.BlockCode(Wicket(2))}");
@@ -832,7 +855,7 @@ public class BrickKilnTests
         var held = Sapi.World.AllOnlinePlayers[0].InventoryManager.ActiveHotbarSlot;
         Assert.Equal(3, held.Itemstack.StackSize, "one clay a panel, not the stack");
 
-        await Interact.UseBlock(Wicket(3));
+        await UsePanel(Wicket(3));
         await Ticks(2);
         Assert.Equal(Luted, World.BlockCode(Wicket(3)));
         Assert.Equal(2, held.Itemstack.StackSize);
@@ -842,7 +865,7 @@ public class BrickKilnTests
 
         // And by hand again the other way, which is how you break into one early.
         await Player.Hold("game:clay-blue", 0);
-        await Interact.UseBlock(Wicket(2));
+        await UsePanel(Wicket(2));
         await Ticks(2);
         Assert.Equal(Open, World.BlockCode(Wicket(2)));
     }
