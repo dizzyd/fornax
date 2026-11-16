@@ -2,5 +2,25 @@
 	"fornax:v1.8-grate-colours": [
 		"/bir remapq fornax:kilngrate-fire fornax:kilngrate force",
 		"/iir remapq fornax:kilngrateraw-blue fornax:kilngrateraw force"
+	],
+	"fornax:v1.11-brick-colours": [
+		"/bir remapq fornax:kilnvent-idle-mud fornax:kilnvent-idle force",
+		"/bir remapq fornax:kilnvent-drafting-mud fornax:kilnvent-drafting force",
+		"/bir remapq fornax:kilnbrickfirebox-cold-north-fire fornax:kilnbrickfirebox-cold-north force",
+		"/bir remapq fornax:kilnbrickfirebox-cold-east-fire fornax:kilnbrickfirebox-cold-east force",
+		"/bir remapq fornax:kilnbrickfirebox-cold-south-fire fornax:kilnbrickfirebox-cold-south force",
+		"/bir remapq fornax:kilnbrickfirebox-cold-west-fire fornax:kilnbrickfirebox-cold-west force",
+		"/bir remapq fornax:kilnbrickfirebox-ready-north-fire fornax:kilnbrickfirebox-ready-north force",
+		"/bir remapq fornax:kilnbrickfirebox-ready-east-fire fornax:kilnbrickfirebox-ready-east force",
+		"/bir remapq fornax:kilnbrickfirebox-ready-south-fire fornax:kilnbrickfirebox-ready-south force",
+		"/bir remapq fornax:kilnbrickfirebox-ready-west-fire fornax:kilnbrickfirebox-ready-west force",
+		"/bir remapq fornax:kilnbrickfirebox-warming-north-fire fornax:kilnbrickfirebox-warming-north force",
+		"/bir remapq fornax:kilnbrickfirebox-warming-east-fire fornax:kilnbrickfirebox-warming-east force",
+		"/bir remapq fornax:kilnbrickfirebox-warming-south-fire fornax:kilnbrickfirebox-warming-south force",
+		"/bir remapq fornax:kilnbrickfirebox-warming-west-fire fornax:kilnbrickfirebox-warming-west force",
+		"/bir remapq fornax:kilnbrickfirebox-firing-north-fire fornax:kilnbrickfirebox-firing-north force",
+		"/bir remapq fornax:kilnbrickfirebox-firing-east-fire fornax:kilnbrickfirebox-firing-east force",
+		"/bir remapq fornax:kilnbrickfirebox-firing-south-fire fornax:kilnbrickfirebox-firing-south force",
+		"/bir remapq fornax:kilnbrickfirebox-firing-west-fire fornax:kilnbrickfirebox-firing-west force"
 	]
 }

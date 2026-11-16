@@ -160,6 +160,23 @@ first kiln fires the brick and the lime for the second one. That is not a design
 the order it happened in historically: the mud-brick kiln that made the fired brick for the
 permanent kiln that replaced it.
 
+### Colours
+
+The brick firebox and the draft vent come in every colour of fired brick vanilla makes — fire,
+black, brown, cream, gray, orange, red, tan and clinker — so a kiln in orange brick need not be
+capped in mud. The firebox takes its colour from the five bricks under the fire clay row, all one
+colour; the mouth lining is fire clay whatever the face is, because that is the part the flame
+touches. The brick vent is four bricks round a mortar. Either vent caps either kiln, and the colour
+is only looks. As vanilla's brick courses do, the colours with no texture of their own — black,
+brown, gray, orange, red and tan — are the cream brick with the colour laid over it.
+
+Adding the colour changed the block codes: `kilnvent-{state}` became `kilnvent-{state}-{material}`
+and `kilnbrickfirebox-{state}-{side}` gained a `-{color}`. A world from before 1.11 is carried
+across by the `fornax:v1.11-brick-colours` group in `config/remaps.json` — the old vents become
+`-mud` and the old brick fireboxes `-fire`, which is what they always looked like. A server with
+`DisableAutoRemap` set does not apply it on its own: an admin who joins is asked to, or
+`/fixmapping applyall` does it.
+
 ## What it fires
 
 Anything vanilla's beehive kiln would take: `smeltingType: fire`, or a ware whose product is a
@@ -401,8 +418,9 @@ you have to load through; placement is overridden for this block.)
 | | costs |
 |---|---|
 | firebox | 5 fired bricks + 3 mud bricks |
-| brick firebox | 5 fired bricks + 3 fireclay brick blocks |
+| brick firebox | 5 fired bricks of one colour + 3 fireclay brick blocks |
 | draft vent | 5 mud bricks |
+| brick draft vent | 4 fired bricks of one colour + 1 mortar |
 | mud seal | 4 clay + 1 dirt, each |
 | wicket panel ×2 | 12 fireclay bricks + 4 copper/bronze rods + 4 nails and strips |
 | kiln grate | 49 clay, clay-formed whole over eight layers, then pit-fired one at a time |

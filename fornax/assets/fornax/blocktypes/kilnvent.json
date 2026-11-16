@@ -8,21 +8,39 @@
 				"idle",
 				"drafting"
 			]
+		},
+		{
+			"code": "material",
+			"states": [
+				"mud",
+				"fire",
+				"black",
+				"brown",
+				"cream",
+				"gray",
+				"orange",
+				"red",
+				"tan",
+				"clinker"
+			]
 		}
 	],
 	"attributes": {
 		"handbook": {
 			"groupBy": [
-				"kilnvent-idle"
+				"kilnvent-idle-*"
 			]
 		}
 	},
 	"shape": {
 		"base": "fornax:block/vent"
 	},
-	"blockmaterial": "Soil",
+	"blockmaterialByType": {
+		"*-mud": "Soil",
+		"*": "Ceramic"
+	},
 	"creativeinventoryByType": {
-		"*-idle": {
+		"*-idle-*": {
 			"general": [
 				"*"
 			],
@@ -33,7 +51,10 @@
 		"*": {}
 	},
 	"replaceable": 500,
-	"resistance": 3.5,
+	"resistanceByType": {
+		"*-mud": 3.5,
+		"*": 4.5
+	},
 	"lightAbsorption": 0,
 	"sideopaque": {
 		"all": false
@@ -41,17 +62,65 @@
 	"sidesolid": {
 		"all": false
 	},
-	"textures": {
-		"brick": {
-			"base": "game:block/soil/mudbrick/dark1",
-			"alternates": [
-				{
-					"base": "game:block/soil/mudbrick/dark2"
-				}
-			]
+	"//textures": "ByType takes the first key that matches: mud, then the three brick colours with textures of their own, then the six that are vanilla's overlays and have to be drawn over the cream brick, as vanilla's brick courses draw them.",
+	"texturesByType": {
+		"*-mud": {
+			"brick": {
+				"base": "game:block/soil/mudbrick/dark1",
+				"alternates": [
+					{
+						"base": "game:block/soil/mudbrick/dark2"
+					}
+				]
+			},
+			"inside": {
+				"base": "game:block/clay/ceramic-dark"
+			}
 		},
-		"inside": {
-			"base": "game:block/clay/ceramic-dark"
+		"@.*-(fire|cream|clinker)": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/{material}*"
+			},
+			"inside": {
+				"base": "game:block/clay/ceramic-dark"
+			}
+		},
+		"*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{material}1"
+				],
+				"alternates": [
+					{
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{material}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{material}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{material}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{material}1"
+						]
+					}
+				]
+			},
+			"inside": {
+				"base": "game:block/clay/ceramic-dark"
+			}
 		}
 	},
 	"particlePropertiesByType": {
@@ -169,7 +238,7 @@
 		"*": [
 			{
 				"type": "block",
-				"code": "kilnvent-idle",
+				"code": "kilnvent-idle-{material}",
 				"quantity": {
 					"avg": 1,
 					"var": 0
@@ -193,11 +262,19 @@
 		"y2": 1,
 		"z2": 1
 	},
-	"sounds": {
-		"walk": "game:walk/stone",
-		"place": "game:block/dirt",
-		"break": "game:block/dirt",
-		"hit": "game:block/dirt"
+	"soundsByType": {
+		"*-mud": {
+			"walk": "game:walk/stone",
+			"place": "game:block/dirt",
+			"break": "game:block/dirt",
+			"hit": "game:block/dirt"
+		},
+		"*": {
+			"walk": "game:walk/stone",
+			"place": "game:block/ceramicplace",
+			"break": "game:block/ceramicbreak",
+			"hit": "game:block/ceramicbreak"
+		}
 	},
 	"heldTpIdleAnimation": "holdbothhandslarge",
 	"heldRightReadyAnimation": "heldblockready",
@@ -228,5 +305,8 @@
 		},
 		"scale": 0.4
 	},
-	"materialDensity": 2000
+	"materialDensityByType": {
+		"*-mud": 2000,
+		"*": 2400
+	}
 }

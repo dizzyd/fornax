@@ -23,7 +23,7 @@ public class FornaxTests
     private const string Grate = "fornax:kilngrate-fire";
     private const string Seal = "fornax:kilnseal-intact";
     private const string Cracked = "fornax:kilnseal-cracked";
-    private const string Vent = "fornax:kilnvent-idle";
+    private const string Vent = "fornax:kilnvent-idle-mud";
 
     // "side" is the face the block shows the player, so a south-facing mouth puts the kiln to the north (-z).
     private const string Firebox = "fornax:kilnfirebox-cold-south";
@@ -133,7 +133,7 @@ public class FornaxTests
     [VsTest]
     public async Task EveryKilnBlockRegisters()
     {
-        string[] codes = { Grate, Seal, Cracked, Vent, Firebox, "fornax:kilnfirebox-cold-north", "fornax:kilnfirebox-warming-south", "fornax:kilnvent-drafting" };
+        string[] codes = { Grate, Seal, Cracked, Vent, Firebox, "fornax:kilnfirebox-cold-north", "fornax:kilnfirebox-warming-south", "fornax:kilnvent-drafting-mud" };
 
         for (int i = 0; i < codes.Length; i++)
         {
@@ -1723,7 +1723,7 @@ public class FornaxTests
         await Tick3s();
 
         BlockPos vent = Center().AddCopy(0, 5, 0);
-        Assert.Equal("fornax:kilnvent-drafting", World.BlockCode(vent), "a lit kiln should be drafting");
+        Assert.Equal("fornax:kilnvent-drafting-mud", World.BlockCode(vent), "a lit kiln should be drafting");
 
         World.SetBlock("game:air", Fb());
         await Ticks(4);
@@ -2492,7 +2492,7 @@ public class FornaxTests
         await Tick3s();
 
         BlockPos ventPos = Center().AddCopy(0, 5, 0);
-        Assert.Equal("fornax:kilnvent-idle", World.BlockCode(ventPos));
+        Assert.Equal("fornax:kilnvent-idle-mud", World.BlockCode(ventPos));
         Assert.Equal(Firebox, World.BlockCode(Fb()));
         Assert.Equal(0, (int)World.GetBlock(Fb()).LightHsv[2]);
 
@@ -2509,7 +2509,7 @@ public class FornaxTests
         await Ticks(4);
 
         Assert.Equal("fornax:kilnfirebox-warming-south", World.BlockCode(Fb()));
-        Assert.Equal("fornax:kilnvent-drafting", World.BlockCode(ventPos));
+        Assert.Equal("fornax:kilnvent-drafting-mud", World.BlockCode(ventPos));
 
         var lit = World.GetBlock(Fb());
         Log($"lit firebox: light={lit.LightHsv[0]},{lit.LightHsv[1]},{lit.LightHsv[2]} particles={lit.ParticleProperties?.Length ?? 0}");
@@ -2528,7 +2528,7 @@ public class FornaxTests
         // and it all goes back when the firing ends
         for (int i = 0; i < 10 && Be().Lit; i++) { await Hours(3); await Tick3s(); }
         Assert.True(!Be().Lit);
-        Assert.Equal("fornax:kilnvent-idle", World.BlockCode(ventPos));
+        Assert.Equal("fornax:kilnvent-idle-mud", World.BlockCode(ventPos));
 
         // fuel is left over, so it settles on "ready" rather than "cold"
         Log("after the firing: " + World.BlockCode(Fb()) + ", fuel left=" + Be().FuelItemCount());
@@ -2788,7 +2788,7 @@ public class FornaxTests
         Assert.Equal(66, byName["game:mudbrick-dark"]);
         Assert.Equal(9, byName["fornax:kilngrate-fire"]);
         Assert.Equal(6, byName["fornax:kilnseal-intact"]);
-        Assert.Equal(1, byName["fornax:kilnvent-idle"]);
+        Assert.Equal(1, byName["fornax:kilnvent-idle-mud"]);
 
         // Of the 110 structure positions: the firebox is already right and the 27 chamber
         // positions are already clear, so what is ghosted is exactly what you must build -
@@ -3073,7 +3073,7 @@ public class FornaxVisualTests
     private const string Wall = "game:mudbrick-dark";
     private const string Grate = "fornax:kilngrate-fire";
     private const string Seal = "fornax:kilnseal-intact";
-    private const string Vent = "fornax:kilnvent-idle";
+    private const string Vent = "fornax:kilnvent-idle-mud";
     private const string Firebox = "fornax:kilnfirebox-cold-south";
 
     [VsTest(TimeoutMs = 180000)]
@@ -3276,7 +3276,7 @@ public class FornaxVisualTests
             // gui transform it happens to present its mouth to the viewer - so it reads as a
             // firebox rather than as a plain mud brick cube.
             "fornax:kilnfirebox-cold-north",
-            "fornax:kilnvent-idle",
+            "fornax:kilnvent-idle-mud",
             "fornax:kilngrate-fire",
             "fornax:kilnseal-intact",
             "fornax:kilngrateraw-blue",

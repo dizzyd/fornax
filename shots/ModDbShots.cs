@@ -19,11 +19,11 @@ public class ModDbShots
     private const string Wall = "game:mudbrick-dark";
     private const string Grate = "fornax:kilngrate-fire";
     private const string Seal = "fornax:kilnseal-intact";
-    private const string Vent = "fornax:kilnvent-idle";
+    private const string Vent = "fornax:kilnvent-idle-mud";
     private const string Firebox = "fornax:kilnfirebox-cold-south";
 
     private const string BrickWall = "game:claybricks-good-fire";
-    private const string BrickFirebox = "fornax:kilnbrickfirebox-cold-south";
+    private const string BrickFirebox = "fornax:kilnbrickfirebox-cold-south-fire";
     private const string WicketLuted = "fornax:kilndoor-luted-south";
     private const string WicketOpen = "fornax:kilndoor-open-south";
 

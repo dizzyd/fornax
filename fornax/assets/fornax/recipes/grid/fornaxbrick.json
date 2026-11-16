@@ -1,6 +1,6 @@
 [
 	{
-		"//": "The brick kiln's firebox. The same arrangement as the mud one with the shell course laid in fire clay brick instead of mud brick - the two parts the flame actually touches, this and the wicket, are fire clay either way; the 5x5 drum around them will take any fired brick.",
+		"//": "The brick kiln's firebox. The same arrangement as the mud one with the shell course laid in fired brick instead of mud brick, one colour to a firebox so it can match the kiln it is set into. The mouth lining - the top row, and the part the flame actually touches - is fire clay whatever colour the face is, as the wicket is; the 5x5 drum around them will take any fired brick.",
 		"ingredientPattern": "MMM,B_B,BBB",
 		"ingredients": {
 			"M": {
@@ -9,14 +9,59 @@
 			},
 			"B": {
 				"type": "item",
-				"code": "game:burnedbrick-*"
+				"code": "game:burnedbrick-*",
+				"name": "color",
+				"allowedVariants": [
+					"fire",
+					"black",
+					"brown",
+					"cream",
+					"gray",
+					"orange",
+					"red",
+					"tan",
+					"clinker"
+				]
 			}
 		},
 		"width": 3,
 		"height": 3,
 		"output": {
 			"type": "block",
-			"code": "fornax:kilnbrickfirebox-cold-north",
+			"code": "fornax:kilnbrickfirebox-cold-north-{color}",
+			"quantity": 1
+		}
+	},
+	{
+		"//": "A draft vent in fired brick, to cap a brick kiln in the same colour as its shell. It works exactly as the mud one does; mortared like the brick blocks it sits among, which also keeps it from being the bottom two rows of the firebox recipe.",
+		"ingredientPattern": "B_B,BCB",
+		"ingredients": {
+			"B": {
+				"type": "item",
+				"code": "game:burnedbrick-*",
+				"name": "material",
+				"allowedVariants": [
+					"fire",
+					"black",
+					"brown",
+					"cream",
+					"gray",
+					"orange",
+					"red",
+					"tan",
+					"clinker"
+				]
+			},
+			"C": {
+				"type": "item",
+				"code": "game:mortar"
+			}
+		},
+		"width": 3,
+		"height": 2,
+		"output": {
+			"type": "block",
+			"code": "fornax:kilnvent-idle-{material}",
 			"quantity": 1
 		}
 	},

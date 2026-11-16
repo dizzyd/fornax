@@ -24,13 +24,16 @@ public class BrickKilnTests
     private const string Wall = "game:claybricks-good-fire";
     private const string MudWall = "game:mudbrick-dark";
     private const string Grate = "fornax:kilngrate-fire";
-    private const string Vent = "fornax:kilnvent-idle";
+    private const string Vent = "fornax:kilnvent-idle-mud";
     private const string Luted = "fornax:kilndoor-luted-south";
     private const string Open = "fornax:kilndoor-open-south";
 
     // "side" is the face the block shows the player, so a south-facing mouth puts the kiln to -z.
-    private const string Firebox = "fornax:kilnbrickfirebox-cold-south";
+    private const string Firebox = "fornax:kilnbrickfirebox-cold-south-fire";
     private const string MudFirebox = "fornax:kilnfirebox-cold-south";
+
+    /// <summary>Every fired brick vanilla makes, which is every colour a brick firebox and vent come in.</summary>
+    public static readonly string[] Colours = { "fire", "black", "brown", "cream", "gray", "orange", "red", "tan", "clinker" };
 
     private static BlockPos Fb() => P(8, 1, 12);
     private static BlockPos Ware(int dx, int dz) => Fb().AddCopy(dx, 2, dz - 2);
@@ -47,7 +50,7 @@ public class BrickKilnTests
     /// block wide and two tall in the middle of the front wall, with plain wall either side of
     /// it where the mud kiln has the outer two seals of its three-wide face.
     /// </summary>
-    public static void Build(BlockPos f, string wall = Wall, string firebox = Firebox, string entrance = Luted)
+    public static void Build(BlockPos f, string wall = Wall, string firebox = Firebox, string entrance = Luted, string vent = Vent)
     {
         for (int y = 0; y <= 3; y++)
         {
@@ -92,7 +95,7 @@ public class BrickKilnTests
         {
             for (int dz = -1; dz >= -3; dz--)
             {
-                World.SetBlock((dx == 0 && dz == -2) ? Vent : wall, f.AddCopy(dx, 5, dz));
+                World.SetBlock((dx == 0 && dz == -2) ? vent : wall, f.AddCopy(dx, 5, dz));
             }
         }
     }
@@ -161,7 +164,7 @@ public class BrickKilnTests
     {
         string[] codes =
         {
-            Firebox, "fornax:kilnbrickfirebox-cold-north", "fornax:kilnbrickfirebox-firing-south",
+            Firebox, "fornax:kilnbrickfirebox-cold-north-fire", "fornax:kilnbrickfirebox-firing-south-fire",
             Open, Luted, "fornax:kilndoor-open-north", "fornax:kilndoor-luted-west"
         };
 
@@ -186,9 +189,9 @@ public class BrickKilnTests
             r.Output?.ResolvedItemStack?.Collectible?.Code?.Domain == "fornax");
 
         var firebox = grid.FirstOrDefault(r =>
-            r.Output.ResolvedItemStack.Collectible.Code.Path == "kilnbrickfirebox-cold-north");
+            r.Output.ResolvedItemStack.Collectible.Code.Path == "kilnbrickfirebox-cold-north-fire");
 
-        Assert.NotNull(firebox, "no grid recipe produces kilnbrickfirebox-cold-north");
+        Assert.NotNull(firebox, "no grid recipe produces kilnbrickfirebox-cold-north-fire");
 
         var panels = grid.FindAll(r =>
             r.Output.ResolvedItemStack.Collectible.Code.Path == "kilndoor-open-north");
@@ -216,6 +219,196 @@ public class BrickKilnTests
         Log("wicket panel metals: " + string.Join(", ", metals.OrderBy(m => m)));
         Assert.True(metals.Contains("copper"), "copper should make a wicket panel");
         Assert.True(!metals.Contains("iron"), "iron has no business being needed here");
+
+        await Ticks(1);
+    }
+
+    // ------------------------------------------------------------------
+    //  Colours
+    // ------------------------------------------------------------------
+
+    [VsTest]
+    public async Task EveryBrickColourRegisters()
+    {
+        var missing = new List<string>();
+        void Want(string code)
+        {
+            if (Sapi.World.GetBlock(new AssetLocation(code)) == null) missing.Add(code);
+        }
+
+        foreach (string c in Colours)
+        {
+            foreach (string state in new[] { "cold", "ready", "warming", "firing" })
+            {
+                foreach (string side in new[] { "north", "east", "south", "west" })
+                {
+                    Want($"fornax:kilnbrickfirebox-{state}-{side}-{c}");
+                }
+            }
+
+            Want($"fornax:kilnvent-idle-{c}");
+            Want($"fornax:kilnvent-drafting-{c}");
+        }
+
+        Want("fornax:kilnvent-idle-mud");
+        Want("fornax:kilnvent-drafting-mud");
+
+        Assert.True(missing.Count == 0, "not registered: " + string.Join(", ", missing));
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// Nine vents or fireboxes that look alike in a tooltip are only told apart by name. The
+    /// firebox's keys are patterns with the colour after the facing, and a pattern that misses
+    /// shows the raw lang key - or, worse, the next pattern's colour - so each one is read back.
+    /// </summary>
+    [VsTest]
+    public async Task EveryBrickColourIsNamedForIt()
+    {
+        string Name(string code)
+        {
+            var block = Sapi.World.GetBlock(new AssetLocation(code));
+            return block.GetHeldItemName(new ItemStack(block));
+        }
+
+        foreach (string c in Colours)
+        {
+            string word = c == "fire" ? "Fireclay" : char.ToUpperInvariant(c[0]) + c.Substring(1);
+            Assert.Equal($"{word} Brick Draft Vent", Name($"fornax:kilnvent-idle-{c}"));
+            Assert.Equal($"{word} Brick Updraft Kiln Firebox", Name($"fornax:kilnbrickfirebox-cold-east-{c}"));
+            Assert.Equal($"{word} Brick Updraft Kiln Firebox (firing)", Name($"fornax:kilnbrickfirebox-firing-south-{c}"));
+        }
+
+        Assert.Equal("Kiln Draft Vent", Name("fornax:kilnvent-idle-mud"));
+        Assert.Equal("Kiln Draft Vent (drafting)", Name("fornax:kilnvent-drafting-mud"));
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// A named wildcard expands to one recipe a variant, and a colour that resolves to no
+    /// output block is dropped without a word - so each one is looked for by name. The firebox
+    /// takes its face from the bricks and keeps its fire clay lining whatever the colour.
+    /// </summary>
+    [VsTest]
+    public async Task EveryBrickColourHasARecipe()
+    {
+        var grid = Sapi.World.GridRecipes.FindAll(r =>
+            r.Output?.ResolvedItemStack?.Collectible?.Code?.Domain == "fornax");
+
+        List<string> Bricks(GridRecipe r) => r.ResolvedIngredients
+            .Where(i => i?.Code?.Path?.StartsWith("burnedbrick-") == true)
+            .Select(i => i.Code.Path).Distinct().ToList();
+
+        foreach (string c in Colours)
+        {
+            var box = grid.FirstOrDefault(r =>
+                r.Output.ResolvedItemStack.Collectible.Code.Path == $"kilnbrickfirebox-cold-north-{c}");
+            Assert.NotNull(box, $"no grid recipe produces the {c} brick firebox");
+            Assert.Equal($"burnedbrick-{c}", string.Join(",", Bricks(box)), $"the {c} firebox should be faced in {c} brick only");
+            Assert.True(box.ResolvedIngredients.Any(i => i?.Code?.Path == "claybricks-good-fire"),
+                $"the {c} firebox should keep its fire clay lining");
+
+            var vent = grid.FirstOrDefault(r =>
+                r.Output.ResolvedItemStack.Collectible.Code.Path == $"kilnvent-idle-{c}");
+            Assert.NotNull(vent, $"no grid recipe produces the {c} brick vent");
+            Assert.Equal($"burnedbrick-{c}", string.Join(",", Bricks(vent)), $"the {c} vent should be laid in {c} brick only");
+            Assert.True(vent.ResolvedIngredients.Any(i => i?.Code?.Path == "mortar"), $"the {c} vent should be mortared");
+        }
+
+        Assert.NotNull(grid.FirstOrDefault(r => r.Output.ResolvedItemStack.Collectible.Code.Path == "kilnvent-idle-mud"),
+            "the mud vent should still have its recipe");
+
+        await Ticks(1);
+    }
+
+    /// <summary>
+    /// The colour is a third variant group riding along with state and facing, and every swap
+    /// the kiln makes - lit, drafting, put out, dropped - goes through CodeWithVariant. One swap
+    /// that rebuilt the code by hand would turn an orange kiln back into a fire clay one.
+    /// </summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AColouredKilnKeepsItsColourThroughAFiring()
+    {
+        const string Orange = "game:brickcourse-four-running-orange";
+        Build(Fb(), wall: Orange, firebox: "fornax:kilnbrickfirebox-cold-south-orange", vent: "fornax:kilnvent-idle-orange");
+        Fuel("game:firewood", 24);
+        await Ticks(2);
+        await Tick3s();
+
+        var be = Be();
+        Assert.True(be.IsBrickKiln, "an orange brick firebox is still the brick kiln");
+        Assert.True(be.StructureComplete, "an orange brick kiln with an orange vent should complete");
+
+        // The build guide suggests the vent in the firebox's own colour.
+        BlockPos vent = Fb().AddCopy(0, 5, -2);
+        World.SetBlock("game:air", vent);
+        await Tick3s();
+        var wanted = new List<Block>();
+        be.MissingStructurePositions(new List<int>(), wanted);
+        Assert.Equal("fornax:kilnvent-idle-orange", wanted.Single().Code.ToString(), "an orange kiln should ghost an orange vent");
+        World.SetBlock("fornax:kilnvent-idle-orange", vent);
+        await Tick3s();
+        Assert.True(be.StructureComplete);
+
+        be.TryIgnite(null);
+        await Tick3s();
+
+        Assert.Equal("fornax:kilnbrickfirebox-warming-south-orange", World.BlockCode(Fb()), "a lit orange firebox should stay orange");
+        Assert.Equal("fornax:kilnvent-drafting-orange", World.BlockCode(vent));
+
+        var drops = Sapi.World.BlockAccessor.GetBlock(Fb()).GetDrops(Sapi.World, Fb(), null);
+        Assert.Equal("fornax:kilnbrickfirebox-cold-north-orange", drops[0].Collectible.Code.ToString(),
+            "a broken firebox should drop the cold one in its own colour");
+
+        World.SetBlock("game:air", Fb());
+        await Ticks(4);
+        Assert.Equal("fornax:kilnvent-idle-orange", World.BlockCode(vent), "a vent that stops drafting keeps its colour");
+    }
+
+    /// <summary>Either vent caps either kiln: the colour is looks, not a second kind of kiln.</summary>
+    [VsTest(TimeoutMs = 120000)]
+    public async Task AnyVentCapsEitherKiln()
+    {
+        BlockPos vent = Fb().AddCopy(0, 5, -2);
+
+        Build(Fb(), vent: "fornax:kilnvent-idle-mud");
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete, "a brick kiln should take the mud vent");
+
+        FornaxTests.Build(Fb());
+        World.SetBlock("fornax:kilnvent-idle-red", vent);
+        await Ticks(2);
+        await Tick3s();
+        Assert.True(Be().StructureComplete, "a mud kiln should take a brick vent");
+    }
+
+    /// <summary>
+    /// The colour group renamed blocks every pre-1.11 world has in it. The remap that carries
+    /// them across is a list of strings nothing checks: each one has to name a block that no
+    /// longer exists and one that does, or a world loads with question-mark cubes in its kilns.
+    /// The remap itself running against an old save is verified by hand, as 1.8's was.
+    /// </summary>
+    [VsTest]
+    public async Task TheColourRemapLandsOnRealBlocks()
+    {
+        var asset = Sapi.Assets.Get(new AssetLocation("fornax", "config/remaps.json"));
+        var remaps = asset.ToObject<Dictionary<string, string[]>>();
+        Assert.True(remaps.TryGetValue("fornax:v1.11-brick-colours", out var lines), "no v1.11 remap group");
+
+        // two vent states, and four states by four facings of brick firebox
+        Assert.Equal(2 + 16, lines.Length);
+        foreach (string line in lines)
+        {
+            // "/bir remapq <new> <old> force"
+            string[] p = line.Split(' ');
+            Assert.Equal("/bir", p[0], line);
+            Assert.NotNull(Sapi.World.GetBlock(new AssetLocation(p[2])), $"remap target {p[2]} is not a block");
+            Assert.True(Sapi.World.GetBlock(new AssetLocation(p[3])) == null, $"remap source {p[3]} still exists, so nothing needed remapping");
+            // what each always looked like: a mud vent, and a fire clay brick firebox
+            string suffix = p[3].StartsWith("fornax:kilnvent-") ? "-mud" : "-fire";
+            Assert.Equal(p[3] + suffix, p[2], line);
+        }
 
         await Ticks(1);
     }
@@ -744,6 +937,7 @@ public class BrickKilnTests
         var codes = wanted.Select(b => b.Code.ToString()).ToList();
         Assert.True(codes.Contains("game:claybricks-good-fire"), "a brick wall position should ghost a brick");
         Assert.True(codes.Contains("fornax:kilndoor-luted-north"), "a wicket position should ghost a luted panel");
+        Assert.True(codes.Contains("fornax:kilnvent-idle-fire"), "the vent position should ghost a vent in the firebox's brick");
     }
 
     /// <summary>
@@ -886,8 +1080,8 @@ public class BrickKilnVisualTests
 
         string[] codes =
         {
-            "fornax:kilnbrickfirebox-firing-north",
-            "fornax:kilnbrickfirebox-cold-north",
+            "fornax:kilnbrickfirebox-firing-north-fire",
+            "fornax:kilnbrickfirebox-cold-north-fire",
             "fornax:kilndoor-luted-north",
             "fornax:kilndoor-open-north"
         };
@@ -904,6 +1098,42 @@ public class BrickKilnVisualTests
             Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "brick-kiln-blocks.png"));
 
         Log($"firebox firing / cold / wicket luted / wicket open: {path}");
+        Assert.NotNull(path);
+    }
+
+    /// <summary>
+    /// Every colour of firebox with its vent beside it. Six of the nine are the cream brick with
+    /// the colour overlaid, the way vanilla's own courses draw them; drawn without the base those
+    /// textures go translucent, which a registration test cannot see.
+    /// </summary>
+    [VsTest(TimeoutMs = 180000)]
+    [RequiresClient]
+    [PlotSize(40, 32)]
+    public async Task EveryBrickColourDraws()
+    {
+        await World.SetCalendarTo(500 * 24 + 12);
+
+        var colours = BrickKilnTests.Colours;
+        for (int i = 0; i < colours.Length; i++)
+        {
+            World.SetBlock($"fornax:kilnbrickfirebox-cold-north-{colours[i]}", P(4 + i * 3, 1, 12));
+            World.SetBlock(colours[i] == "fire" ? "game:claybricks-good-fire" : $"game:brickcourse-four-running-{colours[i]}", P(5 + i * 3, 1, 12));
+            World.SetBlock($"fornax:kilnvent-idle-{colours[i]}", P(4 + i * 3, 2, 12));
+        }
+        World.SetBlock("fornax:kilnvent-idle-mud", P(34, 1, 12));
+
+        await Ticks(4);
+        // Facing +z the row reads right to left, fire clay at the right; stood back and looking a
+        // little above it, so the whole row clears the minimap in the top corner.
+        await Player.Teleport(P(18, 3, -8));
+        await Ticks(10);
+        await Interact.LookAt(P(18, 4, 12));
+        await Frames.Wait(30);
+
+        string path = await Shot.Take(System.IO.Path.Combine(
+            Environment.GetEnvironmentVariable("VSTK_SHOT_DIR") ?? "/tmp", "brick-colours.png"));
+
+        Log($"fireboxes and vents, {string.Join(" ", colours)}, then mud: {path}");
         Assert.NotNull(path);
     }
 

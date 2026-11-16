@@ -31,7 +31,7 @@
 		"height": 2,
 		"output": {
 			"type": "block",
-			"code": "fornax:kilnvent-idle",
+			"code": "fornax:kilnvent-idle-mud",
 			"quantity": 1
 		}
 	},

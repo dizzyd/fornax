@@ -59,6 +59,9 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
     /// </summary>
     public bool IsBrickKiln { get; private set; }
 
+    /// <summary>The brick a brick firebox is faced in. Cosmetic: every colour is the same kiln.</summary>
+    private string BrickColor => Block?.Variant?["color"] ?? "fire";
+
     // The three numbers the two kilns disagree about. See the note in FornaxConfig: mortared
     // brick joints leak less, so a firing costs less; dense brick has more mass than straw
     // tempered cob, so it is slower both to heat and to cool. Everything else - the temperature
@@ -1650,9 +1653,11 @@ public class BlockEntityUpdraftFirebox : BlockEntityContainer, IHeatSource
         if (IsChamber(wanted)) return null;
         if (path.Contains("mudbrick") || path.Contains("cob")) return Api.World.GetBlock(new AssetLocation("game", "mudbrick-dark"));
         if (IsBrickWall(path)) return Api.World.GetBlock(new AssetLocation("game", "claybricks-good-fire"));
-        if (path.Contains(BrickFireboxCode)) return Api.World.GetBlock(new AssetLocation("fornax", BrickFireboxCode + "-cold-north"));
+        if (path.Contains(BrickFireboxCode)) return Api.World.GetBlock(new AssetLocation("fornax", BrickFireboxCode + "-cold-north-" + BrickColor));
         if (path.Contains("kilnfirebox")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnfirebox-cold-north"));
-        if (path.Contains("kilnvent")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnvent-idle"));
+        // Any vent caps either kiln; the ghost suggests the one that matches the firebox. That
+        // leans on the vent's "material" states including every firebox "color".
+        if (path.Contains("kilnvent")) return Api.World.GetBlock(new AssetLocation("fornax", "kilnvent-idle-" + (IsBrickKiln ? BrickColor : "mud")));
         // Any colour of grate completes the kiln; the ghost shows the fire clay one, which is
         // the cream brick a grate was before it came in colours.
         if (path.Contains("kilngrate")) return Api.World.GetBlock(new AssetLocation("fornax", "kilngrate-fire"));

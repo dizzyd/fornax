@@ -20,6 +20,20 @@
 		{
 			"code": "side",
 			"loadFromProperties": "game:abstract/horizontalorientation"
+		},
+		{
+			"code": "color",
+			"states": [
+				"fire",
+				"black",
+				"brown",
+				"cream",
+				"gray",
+				"orange",
+				"red",
+				"tan",
+				"clinker"
+			]
 		}
 	],
 	"attributes": {
@@ -702,36 +716,63 @@
 		}
 	},
 	"shapeByType": {
-		"*-north": {
+		"*-north-*": {
 			"base": "fornax:block/firebox",
 			"rotateY": 0
 		},
-		"*-east": {
+		"*-east-*": {
 			"base": "fornax:block/firebox",
 			"rotateY": 270
 		},
-		"*-south": {
+		"*-south-*": {
 			"base": "fornax:block/firebox",
 			"rotateY": 180
 		},
-		"*-west": {
+		"*-west-*": {
 			"base": "fornax:block/firebox",
 			"rotateY": 90
 		}
 	},
+	"//textures": "ByType takes the first key that matches, so the order below is load-bearing: each state's fire/cream/clinker entry must come before that state's catch-all, and every state before the final '*'. Fire, cream and clinker have brick textures of their own; the other six colours are vanilla's overlays, which go translucent unless drawn over the cream brick the way vanilla's brick courses draw them.",
 	"texturesByType": {
-		"*-firing-*": {
+		"@.*-firing-.*-(fire|cream|clinker)": {
 			"brick": {
-				"base": "game:block/clay/brick/four/running/fire1",
+				"base": "game:block/clay/brick/four/running/{color}*"
+			},
+			"inside": {
+				"base": "game:block/fire-orange"
+			}
+		},
+		"@.*-firing-.*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{color}1"
+				],
 				"alternates": [
 					{
-						"base": "game:block/clay/brick/four/running/fire2"
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire3"
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire4"
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					}
 				]
 			},
@@ -739,18 +780,44 @@
 				"base": "game:block/fire-orange"
 			}
 		},
-		"*-warming-*": {
+		"@.*-warming-.*-(fire|cream|clinker)": {
 			"brick": {
-				"base": "game:block/clay/brick/four/running/fire1",
+				"base": "game:block/clay/brick/four/running/{color}*"
+			},
+			"inside": {
+				"base": "game:block/coal/ember"
+			}
+		},
+		"@.*-warming-.*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{color}1"
+				],
 				"alternates": [
 					{
-						"base": "game:block/clay/brick/four/running/fire2"
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire3"
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire4"
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					}
 				]
 			},
@@ -758,18 +825,44 @@
 				"base": "game:block/coal/ember"
 			}
 		},
-		"*-ready-*": {
+		"@.*-ready-.*-(fire|cream|clinker)": {
 			"brick": {
-				"base": "game:block/clay/brick/four/running/fire1",
+				"base": "game:block/clay/brick/four/running/{color}*"
+			},
+			"inside": {
+				"base": "game:block/wood/firewood/side"
+			}
+		},
+		"@.*-ready-.*": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{color}1"
+				],
 				"alternates": [
 					{
-						"base": "game:block/clay/brick/four/running/fire2"
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire3"
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire4"
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					}
 				]
 			},
@@ -777,18 +870,44 @@
 				"base": "game:block/wood/firewood/side"
 			}
 		},
+		"@.*-(fire|cream|clinker)": {
+			"brick": {
+				"base": "game:block/clay/brick/four/running/{color}*"
+			},
+			"inside": {
+				"base": "game:block/clay/ceramic-dark"
+			}
+		},
 		"*": {
 			"brick": {
-				"base": "game:block/clay/brick/four/running/fire1",
+				"base": "game:block/clay/brick/four/running/cream1",
+				"overlays": [
+					"game:block/clay/brick/four/running/{color}1"
+				],
 				"alternates": [
 					{
-						"base": "game:block/clay/brick/four/running/fire2"
+						"base": "game:block/clay/brick/four/running/cream2",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire3"
+						"base": "game:block/clay/brick/four/running/cream3",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					},
 					{
-						"base": "game:block/clay/brick/four/running/fire4"
+						"base": "game:block/clay/brick/four/running/cream4",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
+					},
+					{
+						"base": "game:block/clay/brick/four/running/cream5",
+						"overlays": [
+							"game:block/clay/brick/four/running/{color}1"
+						]
 					}
 				]
 			},
@@ -826,7 +945,7 @@
 		}
 	},
 	"particlePropertiesByType": {
-		"*-firing-north": [
+		"*-firing-north-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -971,7 +1090,7 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*-firing-south": [
+		"*-firing-south-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -1116,7 +1235,7 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*-firing-east": [
+		"*-firing-east-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -1261,7 +1380,7 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*-firing-west": [
+		"*-firing-west-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -1440,7 +1559,7 @@
 				"particleModel": "Quad"
 			}
 		],
-		"*-warming-north": [
+		"*-warming-north-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -1585,7 +1704,7 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*-warming-south": [
+		"*-warming-south-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -1730,7 +1849,7 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*-warming-east": [
+		"*-warming-east-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -1875,7 +1994,7 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*-warming-west": [
+		"*-warming-west-*": [
 			{
 				"//": "embers spilling out of the firebox mouth",
 				"hsvaColor": [
@@ -2023,7 +2142,7 @@
 	},
 	"blockmaterial": "Ceramic",
 	"creativeinventoryByType": {
-		"*-cold-north": {
+		"*-cold-north-*": {
 			"general": [
 				"*"
 			],
