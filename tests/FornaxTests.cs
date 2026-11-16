@@ -2567,6 +2567,36 @@ public class FornaxTests
         CheckSpawns(Center().AddCopy(0, 5, 0), "vent");
     }
 
+    /// <summary>
+    /// ByType takes the first key that matches, and every firebox state carries at least a
+    /// placeholder group, so "declares particles" passes for a block that emits nothing. The
+    /// warming smoke and embers sat behind the catch-all for that reason, unseen and unflagged.
+    /// Each lit state, in each facing and in either firebox, has to emit something.
+    /// </summary>
+    [VsTest]
+    public async Task EveryLitFireboxStateEmitsParticles()
+    {
+        var silent = new List<string>();
+        var codes = new List<string>();
+        foreach (string state in new[] { "warming", "firing" })
+        {
+            foreach (string side in new[] { "north", "east", "south", "west" })
+            {
+                codes.Add($"fornax:kilnfirebox-{state}-{side}");
+                foreach (string c in BrickKilnTests.Colours) codes.Add($"fornax:kilnbrickfirebox-{state}-{side}-{c}");
+            }
+        }
+
+        foreach (string code in codes)
+        {
+            var block = Sapi.World.GetBlock(new AssetLocation(code));
+            if (block?.ParticleProperties == null || !block.ParticleProperties.Any(pp => pp.Quantity.avg > 0)) silent.Add(code);
+        }
+
+        Assert.True(silent.Count == 0, "emits nothing: " + string.Join(", ", silent));
+        await Ticks(1);
+    }
+
     private static void CheckSpawns(BlockPos pos, string what)
     {
         var block = World.GetBlock(pos);

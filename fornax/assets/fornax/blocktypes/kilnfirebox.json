@@ -1382,40 +1382,6 @@
 				"windAffectednes": 0.7
 			}
 		],
-		"*": [
-			{
-				"//": "registration placeholder - emits nothing",
-				"hsvaColor": [
-					{
-						"avg": 0,
-						"var": 0
-					},
-					{
-						"avg": 0,
-						"var": 0
-					},
-					{
-						"avg": 0,
-						"var": 0
-					},
-					{
-						"avg": 0,
-						"var": 0
-					}
-				],
-				"quantity": {
-					"avg": 0
-				},
-				"size": {
-					"avg": 0.1,
-					"var": 0
-				},
-				"lifeLength": {
-					"avg": 0.1
-				},
-				"particleModel": "Quad"
-			}
-		],
 		"*-warming-north": [
 			{
 				"//": "embers spilling out of the firebox mouth",
@@ -1994,6 +1960,40 @@
 					"avg": 2.0
 				},
 				"windAffectednes": 0.7
+			}
+		],
+		"*": [
+			{
+				"//": "registration placeholder - emits nothing",
+				"hsvaColor": [
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					},
+					{
+						"avg": 0,
+						"var": 0
+					}
+				],
+				"quantity": {
+					"avg": 0
+				},
+				"size": {
+					"avg": 0.1,
+					"var": 0
+				},
+				"lifeLength": {
+					"avg": 0.1
+				},
+				"particleModel": "Quad"
 			}
 		]
 	},
